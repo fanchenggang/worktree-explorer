@@ -1,0 +1,113 @@
+{
+  "name": "worktree-explorer",
+  "displayName": "Worktree Explorer",
+  "description": "List git worktrees, add notes, and open them in Cursor or IntelliJ IDEA",
+  "version": "0.1.0",
+  "publisher": "maiya",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onView:worktreeExplorer.list"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Worktree Explorer",
+      "properties": {
+        "worktreeExplorer.ideaCommand": {
+          "type": "string",
+          "default": "idea",
+          "description": "Command used to open IntelliJ IDEA."
+        },
+        "worktreeExplorer.cursorCommand": {
+          "type": "string",
+          "default": "cursor",
+          "description": "Command used to open Cursor when this extension is not running inside Cursor."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "worktreeExplorer",
+          "title": "Worktrees",
+          "icon": "media/worktree.svg"
+        }
+      ]
+    },
+    "views": {
+      "worktreeExplorer": [
+        {
+          "id": "worktreeExplorer.list",
+          "name": "Worktrees"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "worktreeExplorer.list",
+        "contents": "No git repository in the current workspace."
+      }
+    ],
+    "commands": [
+      {
+        "command": "worktreeExplorer.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "worktreeExplorer.openCursor",
+        "title": "Open in Cursor",
+        "icon": "$(window)"
+      },
+      {
+        "command": "worktreeExplorer.openIdea",
+        "title": "Open in IDEA",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "worktreeExplorer.editNote",
+        "title": "Edit Note",
+        "icon": "$(pencil)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "worktreeExplorer.refresh",
+          "when": "view == worktreeExplorer.list",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "worktreeExplorer.openCursor",
+          "when": "view == worktreeExplorer.list && viewItem == worktree",
+          "group": "inline"
+        },
+        {
+          "command": "worktreeExplorer.openIdea",
+          "when": "view == worktreeExplorer.list && viewItem == worktree",
+          "group": "inline"
+        },
+        {
+          "command": "worktreeExplorer.editNote",
+          "when": "view == worktreeExplorer.list && viewItem == worktree",
+          "group": "inline"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.6.0"
+  }
+}
