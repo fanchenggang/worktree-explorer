@@ -4,6 +4,11 @@
   "description": "List git worktrees, add notes, and open them in Cursor or IntelliJ IDEA",
   "version": "0.1.0",
   "publisher": "maiya",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fanchenggang/worktree-explorer.git"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -103,7 +108,8 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "package": "npx --yes @vscode/vsce@3.9.2 package"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",

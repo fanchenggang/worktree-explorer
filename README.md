@@ -18,10 +18,17 @@ Cursor / VS Code 侧边栏插件：列出当前仓库的全部 git worktree，�
 
 ## 安装 VSIX
 
+本地打包：
+
 ```bash
 npm install
-npx @vscode/vsce package
+npm run package
 ```
+
+GitHub Actions 会在每次推送到 `main`、开 PR，或手动触发时打包 VSIX：
+
+- **Actions → Package VSIX → Artifacts** 下载
+- 打 `v*` tag（例如 `v0.1.0`）时，会自动发 Release 并附上 `.vsix`
 
 在 Cursor 里：Extensions → `...` → Install from VSIX。
 
