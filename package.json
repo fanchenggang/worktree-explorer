@@ -2,7 +2,7 @@
   "name": "worktree-explorer",
   "displayName": "Worktree Explorer",
   "description": "List git worktrees, add notes, and open them in Cursor or IntelliJ IDEA",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "maiya",
   "license": "MIT",
   "repository": {
@@ -76,6 +76,16 @@
         "command": "worktreeExplorer.editNote",
         "title": "Edit Note",
         "icon": "$(pencil)"
+      },
+      {
+        "command": "worktreeExplorer.createWorktree",
+        "title": "Create Worktree Branch from Current Branch",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "worktreeExplorer.deleteWorktree",
+        "title": "Delete Worktree",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -101,6 +111,16 @@
           "command": "worktreeExplorer.editNote",
           "when": "view == worktreeExplorer.list && viewItem == worktree",
           "group": "inline"
+        },
+        {
+          "command": "worktreeExplorer.createWorktree",
+          "when": "view == worktreeExplorer.list && viewItem == worktree",
+          "group": "1_create"
+        },
+        {
+          "command": "worktreeExplorer.deleteWorktree",
+          "when": "view == worktreeExplorer.list && viewItem == worktree",
+          "group": "2_delete"
         }
       ]
     }

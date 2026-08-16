@@ -78,3 +78,73 @@ export function workspaceRoot(): string | undefined {
 export function isCurrentWorktree(worktreePath: string, workspacePath: string): boolean {
   return path.resolve(worktreePath) === path.resolve(workspacePath);
 }
+
+export async function currentBranch(cwd: string): Promise<string> {
+  const { stdout } = await execFileAsync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+    cwd,
+    encoding: "utf8",
+  });
+  return stdout.trim();
+}
+
+export async function validateBranchName(
+  cwd: string,
+  branch: string
+): Promise<string | undefined> {
+  if (!branch) {
+    return "Branch name is required.";
+  }
+
+  try {
+    await execFileAsync("git", ["check-ref-format", "--branch", branch], {
+      cwd,
+      encoding: "utf8",
+    });
+  } catch {
+    return `"${branch}" is not a valid git branch name.`;
+  }
+
+  try {
+    await execFileAsync("git", ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`], {
+      cwd,
+      encoding: "utf8",
+    });
+    return `Branch "${branch}" already exists.`;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function addWorktree(
+  cwd: string,
+  branch: string,
+  worktreePath: string,
+  baseBranch: string
+): Promise<void> {
+  await execFileAsync(
+    "git",
+    ["worktree", "add", "--no-track", "-b", branch, worktreePath, baseBranch],
+    {
+      cwd,
+      encoding: "utf8",
+    }
+  );
+}
+
+export async function removeWorktree(cwd: string, worktreePath: string): Promise<void> {
+  await execFileAsync("git", ["worktree", "remove", "--force", worktreePath], {
+    cwd,
+    encoding: "utf8",
+  });
+}
+
+export async function deleteBranch(cwd: string, branch: string): Promise<void> {
+  await execFileAsync("git", ["branch", "-D", branch], {
+    cwd,
+    encoding: "utf8",
+  });
+}
+
+export function branchFolderName(branch: string): string {
+  return branch.trim().replace(/[\\/:*?"<>|]/g, "-");
+}
