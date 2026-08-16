@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Slim the worktree context menu by removing `Open in VS Code`, `Open in Current Window`, `Lock Worktree`, `Unlock Worktree`, and `Clear Note`; these commands remain available from the command palette.
+
 ## [0.4.0] - 2026-08-16
 
 ### Added

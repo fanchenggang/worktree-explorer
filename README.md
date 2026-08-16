@@ -8,7 +8,7 @@ Cursor / VS Code 侧边栏插件：列出当前仓库的全部 git worktree，�
   - 当前打开的 worktree 标为 `current`
   - 显示未提交变更数、领先/落后远程状态、upstream 名称和最后提交时间
   - 本地分支与远程分支名不一致时显示 ⚠ 警告
-  - 显示 lock / prunable 状态，可锁定、解锁 worktree
+  - 显示 lock / prunable 状态；锁定/解锁可通过命令面板执行
   - 多仓库工作区可选择要展示的仓库
   - 当前窗口获得焦点时自动防抖刷新（可配置）
 - 创建 worktree 向导
@@ -19,17 +19,17 @@ Cursor / VS Code 侧边栏插件：列出当前仓库的全部 git worktree，�
   - 新 worktree 目录默认 `<仓库根>/<分支名>`，并校验父目录和冲突路径
   - 可选择复制 `.cursor` / `.vscode` 等设置目录（默认复制 `.cursor`，可配置）
   - 创建完成后可直接在 Cursor / 当前窗口 / 终端打开
-- 右键操作
-  - Open in Cursor / VS Code / IDEA / Current Window / Terminal
+- 右键操作（精简菜单）
+  - Open in Cursor / IDEA / Terminal
   - Reveal in File Explorer、Copy Path
   - Pull、Push、Fetch、Merge
     - Pull 无 upstream 时可选择设置 upstream 后拉取
     - 输出写入 `Worktree Explorer` OutputChannel，可一键复制
-  - 编辑/清除备注（只存本机，不进 Git）
-  - Lock / Unlock worktree（可填写锁定原因）
+  - 编辑备注（只存本机，不进 Git）
   - Delete worktree
     - 当前窗口打开的 worktree、主 worktree 禁止删除
     - 有未提交改动、已锁定、分支在其他 worktree 检出时都有前置检查
+  - 为减少右键菜单噪音，`Open in VS Code`、`Open in Current Window`、`Lock Worktree`、`Unlock Worktree`、`Clear Note` 仅保留在命令面板
 - 批量操作
   - Fetch All Remotes
   - Pull Selected Worktrees（多选，汇总成功/失败）
