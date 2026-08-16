@@ -45,6 +45,7 @@ jobs:
           fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" *.vsix --clobber
+            gh release edit "$TAG" --notes-file CHANGELOG.md
           else
-            gh release create "$TAG" *.vsix --title "$TAG" --generate-notes --latest
+            gh release create "$TAG" *.vsix --title "$TAG" --notes-file CHANGELOG.md --latest
           fi
