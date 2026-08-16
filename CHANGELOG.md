@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-08-16
+
+### Added
+
+- Show dirty file count, ahead/behind tracking, and last commit age for each worktree.
+- Add `Open in Terminal`, `Copy Path`, and `Prune Worktrees` actions.
+- Prune stale worktree metadata with confirmation and clean up associated local notes.
+- Unit tests for Git worktree parsing and status formatting.
+
+### Changed
+
+- Improve Git command error messages by including stderr where available.
+- Keep manual refresh only; status information is read when the list is refreshed.
+
 ## [0.2.0] - 2026-08-16
 
 ### Added

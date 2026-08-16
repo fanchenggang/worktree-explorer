@@ -2,73 +2,40 @@ import { execFile } from "child_process";
 import * as path from "path";
 import { promisify } from "util";
 import * as vscode from "vscode";
+import {
+  GitWorktree,
+  WorktreeStatus,
+  parsePorcelain,
+  parseWorktreeStatus,
+} from "./gitWorktreeCore";
+
+export {
+  GitWorktree,
+  WorktreeStatus,
+  branchFolderName,
+  parsePorcelain,
+  parseWorktreeStatus,
+  shortSha,
+} from "./gitWorktreeCore";
 
 const execFileAsync = promisify(execFile);
 
-export interface GitWorktree {
-  path: string;
-  head: string;
-  branch?: string;
-  detached: boolean;
-  bare: boolean;
+export async function runGit(cwd: string, args: string[]): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync("git", args, {
+      cwd,
+      encoding: "utf8",
+    });
+    return stdout.trim();
+  } catch (error) {
+    const stderr = (error as { stderr?: string }).stderr?.trim();
+    throw new Error(stderr || `git ${args.join(" ")} failed`);
+  }
 }
 
 export async function listWorktrees(cwd: string): Promise<GitWorktree[]> {
-  const { stdout } = await execFileAsync("git", ["worktree", "list", "--porcelain"], {
-    cwd,
-    encoding: "utf8",
-  });
-  return parsePorcelain(stdout);
-}
-
-export function parsePorcelain(output: string): GitWorktree[] {
-  const worktrees: GitWorktree[] = [];
-  let current: Partial<GitWorktree> | undefined;
-
-  const flush = () => {
-    if (current?.path) {
-      worktrees.push({
-        path: current.path,
-        head: current.head ?? "",
-        branch: current.branch,
-        detached: current.detached ?? false,
-        bare: current.bare ?? false,
-      });
-    }
-    current = undefined;
-  };
-
-  for (const line of output.split(/\r?\n/)) {
-    if (line === "") {
-      flush();
-      continue;
-    }
-    if (line.startsWith("worktree ")) {
-      current = { path: line.slice("worktree ".length) };
-    } else if (line.startsWith("HEAD ")) {
-      if (current) {
-        current.head = line.slice("HEAD ".length);
-      }
-    } else if (line.startsWith("branch ")) {
-      if (current) {
-        current.branch = line.slice("branch ".length).replace(/^refs\/heads\//, "");
-      }
-    } else if (line === "detached") {
-      if (current) {
-        current.detached = true;
-      }
-    } else if (line === "bare") {
-      if (current) {
-        current.bare = true;
-      }
-    }
-  }
-  flush();
-  return worktrees;
-}
-
-export function shortSha(head: string): string {
-  return head.slice(0, 7);
+  const output = await runGit(cwd, ["worktree", "list", "--porcelain"]);
+  return parsePorcelain(output);
 }
 
 export function workspaceRoot(): string | undefined {
@@ -80,11 +47,7 @@ export function isCurrentWorktree(worktreePath: string, workspacePath: string): 
 }
 
 export async function currentBranch(cwd: string): Promise<string> {
-  const { stdout } = await execFileAsync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
-    cwd,
-    encoding: "utf8",
-  });
-  return stdout.trim();
+  return runGit(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]);
 }
 
 export async function validateBranchName(
@@ -96,19 +59,13 @@ export async function validateBranchName(
   }
 
   try {
-    await execFileAsync("git", ["check-ref-format", "--branch", branch], {
-      cwd,
-      encoding: "utf8",
-    });
+    await runGit(cwd, ["check-ref-format", "--branch", branch]);
   } catch {
     return `"${branch}" is not a valid git branch name.`;
   }
 
   try {
-    await execFileAsync("git", ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`], {
-      cwd,
-      encoding: "utf8",
-    });
+    await runGit(cwd, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]);
     return `Branch "${branch}" already exists.`;
   } catch {
     return undefined;
@@ -121,30 +78,73 @@ export async function addWorktree(
   worktreePath: string,
   baseBranch: string
 ): Promise<void> {
-  await execFileAsync(
-    "git",
-    ["worktree", "add", "--no-track", "-b", branch, worktreePath, baseBranch],
-    {
-      cwd,
-      encoding: "utf8",
-    }
-  );
+  await runGit(cwd, [
+    "worktree",
+    "add",
+    "--no-track",
+    "-b",
+    branch,
+    worktreePath,
+    baseBranch,
+  ]);
 }
 
 export async function removeWorktree(cwd: string, worktreePath: string): Promise<void> {
-  await execFileAsync("git", ["worktree", "remove", "--force", worktreePath], {
-    cwd,
-    encoding: "utf8",
-  });
+  await runGit(cwd, ["worktree", "remove", "--force", worktreePath]);
 }
 
 export async function deleteBranch(cwd: string, branch: string): Promise<void> {
-  await execFileAsync("git", ["branch", "-D", branch], {
-    cwd,
-    encoding: "utf8",
-  });
+  await runGit(cwd, ["branch", "-D", branch]);
 }
 
-export function branchFolderName(branch: string): string {
-  return branch.trim().replace(/[\\/:*?"<>|]/g, "-");
+export async function getWorktreeStatus(
+  cwd: string,
+  worktreePath: string
+): Promise<WorktreeStatus> {
+  const [statusOutput, lastCommit] = await Promise.all([
+    runGit(cwd, [
+      "-C",
+      worktreePath,
+      "status",
+      "--porcelain=v1",
+      "--branch",
+      "--untracked-files=normal",
+    ]),
+    runGit(cwd, ["-C", worktreePath, "log", "-1", "--format=%cI"]),
+  ]);
+
+  return {
+    ...parseWorktreeStatus(statusOutput),
+    lastCommitIso: lastCommit || undefined,
+  };
+}
+
+export async function getWorktreeStatuses(
+  cwd: string,
+  worktrees: GitWorktree[]
+): Promise<Map<string, WorktreeStatus>> {
+  const candidates = worktrees.filter((worktree) => !worktree.bare);
+  const results = await Promise.allSettled(
+    candidates.map((worktree) => getWorktreeStatus(cwd, worktree.path))
+  );
+
+  const statuses = new Map<string, WorktreeStatus>();
+  results.forEach((result, index) => {
+    if (result.status === "fulfilled") {
+      statuses.set(candidates[index].path, result.value);
+      return;
+    }
+    console.warn(
+      `Failed to read status for ${candidates[index].path}: ${String(result.reason)}`
+    );
+  });
+  return statuses;
+}
+
+export async function dryRunPrune(cwd: string): Promise<string> {
+  return runGit(cwd, ["worktree", "prune", "--dry-run"]);
+}
+
+export async function pruneWorktrees(cwd: string): Promise<void> {
+  await runGit(cwd, ["worktree", "prune"]);
 }

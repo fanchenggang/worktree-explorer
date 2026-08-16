@@ -20,6 +20,29 @@ export class NotesStore {
     await this.memento.update(KEY, all);
   }
 
+  async delete(worktreePath: string): Promise<void> {
+    const all = { ...this.getAll() };
+    if (!(worktreePath in all)) {
+      return;
+    }
+    delete all[worktreePath];
+    await this.memento.update(KEY, all);
+  }
+
+  async prune(validPaths: Set<string>): Promise<void> {
+    const all = { ...this.getAll() };
+    let changed = false;
+    for (const worktreePath of Object.keys(all)) {
+      if (!validPaths.has(worktreePath)) {
+        delete all[worktreePath];
+        changed = true;
+      }
+    }
+    if (changed) {
+      await this.memento.update(KEY, all);
+    }
+  }
+
   private getAll(): Record<string, string> {
     return this.memento.get<Record<string, string>>(KEY, {});
   }

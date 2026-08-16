@@ -9,6 +9,9 @@ import {
   branchFolderName,
   currentBranch,
   deleteBranch,
+  dryRunPrune,
+  listWorktrees,
+  pruneWorktrees,
   removeWorktree,
   validateBranchName,
   workspaceRoot,
@@ -61,6 +64,58 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       await notes.set(item.worktree.path, value);
       provider.refresh();
+    }),
+    vscode.commands.registerCommand(
+      "worktreeExplorer.openTerminal",
+      async (item?: WorktreeItem) => {
+        if (!item) {
+          return;
+        }
+        const terminal = vscode.window.createTerminal({
+          cwd: item.worktree.path,
+          name: String(item.label),
+        });
+        terminal.show();
+      }
+    ),
+    vscode.commands.registerCommand("worktreeExplorer.copyPath", async (item?: WorktreeItem) => {
+      if (!item) {
+        return;
+      }
+      await vscode.env.clipboard.writeText(item.worktree.path);
+      vscode.window.showInformationMessage(`Copied ${item.worktree.path}`);
+    }),
+    vscode.commands.registerCommand("worktreeExplorer.prune", async () => {
+      const root = workspaceRoot();
+      if (!root) {
+        vscode.window.showErrorMessage("No workspace folder is open.");
+        return;
+      }
+
+      try {
+        const dryRun = await dryRunPrune(root);
+        if (!dryRun) {
+          vscode.window.showInformationMessage("Nothing to prune.");
+          return;
+        }
+
+        const choice = await vscode.window.showWarningMessage(
+          "Remove stale worktree metadata?",
+          { modal: true },
+          "Prune Worktrees"
+        );
+        if (choice !== "Prune Worktrees") {
+          return;
+        }
+
+        await pruneWorktrees(root);
+        const remaining = await listWorktrees(root);
+        await notes.prune(new Set(remaining.map((worktree) => worktree.path)));
+        provider.refresh();
+        vscode.window.showInformationMessage("Pruned stale worktree metadata.");
+      } catch (error) {
+        vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
+      }
     }),
     vscode.commands.registerCommand("worktreeExplorer.createWorktree", async () => {
       const root = workspaceRoot();
@@ -149,6 +204,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
       try {
         await removeWorktree(root, item.worktree.path);
+        await notes.delete(item.worktree.path);
         if (deleteBranchToo && branch) {
           await deleteBranch(root, branch);
         }

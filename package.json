@@ -2,7 +2,7 @@
   "name": "git-worktree-explorer",
   "displayName": "Worktree Explorer for Cursor & IDEA",
   "description": "List git worktrees, add notes, and open them in Cursor or IntelliJ IDEA",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "fanchenggang",
   "license": "MIT",
   "repository": {
@@ -78,6 +78,21 @@
         "icon": "$(pencil)"
       },
       {
+        "command": "worktreeExplorer.openTerminal",
+        "title": "Open in Terminal",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "worktreeExplorer.copyPath",
+        "title": "Copy Path",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "worktreeExplorer.prune",
+        "title": "Prune Worktrees",
+        "icon": "$(clear-all)"
+      },
+      {
         "command": "worktreeExplorer.createWorktree",
         "title": "Create Worktree Branch",
         "icon": "$(git-branch)"
@@ -90,13 +105,18 @@
     ],
     "menus": {
       "view/title": [
-        {
-          "command": "worktreeExplorer.refresh",
-          "when": "view == worktreeExplorer.list",
-          "group": "navigation"
-        }
-      ],
-      "view/item/context": [
+      {
+        "command": "worktreeExplorer.refresh",
+        "when": "view == worktreeExplorer.list",
+        "group": "navigation"
+      },
+      {
+        "command": "worktreeExplorer.prune",
+        "when": "view == worktreeExplorer.list",
+        "group": "navigation"
+      }
+    ],
+    "view/item/context": [
         {
           "command": "worktreeExplorer.openCursor",
           "when": "view == worktreeExplorer.list && viewItem == worktree",
@@ -107,14 +127,24 @@
           "when": "view == worktreeExplorer.list && viewItem == worktree",
           "group": "inline"
         },
-        {
-          "command": "worktreeExplorer.editNote",
-          "when": "view == worktreeExplorer.list && viewItem == worktree",
-          "group": "inline"
-        },
-        {
-          "command": "worktreeExplorer.createWorktree",
-          "when": "view == worktreeExplorer.list && viewItem == worktree",
+      {
+        "command": "worktreeExplorer.editNote",
+        "when": "view == worktreeExplorer.list && viewItem == worktree",
+        "group": "inline"
+      },
+      {
+        "command": "worktreeExplorer.openTerminal",
+        "when": "view == worktreeExplorer.list && viewItem == worktree",
+        "group": "navigation@1"
+      },
+      {
+        "command": "worktreeExplorer.copyPath",
+        "when": "view == worktreeExplorer.list && viewItem == worktree",
+        "group": "navigation@2"
+      },
+      {
+        "command": "worktreeExplorer.createWorktree",
+        "when": "view == worktreeExplorer.list && viewItem == worktree",
           "group": "1_create"
         },
         {
@@ -129,6 +159,7 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node --test out/*.test.js",
     "package": "npx --yes @vscode/vsce@3.9.2 package"
   },
   "devDependencies": {

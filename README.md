@@ -6,6 +6,7 @@ Cursor / VS Code 侧边栏插件：列出当前仓库的全部 git worktree，�
 
 - 侧边栏列出当前工作区所属仓库的全部 worktree
 - 当前打开的 worktree 标为 `current`
+- 每个 worktree 显示未提交变更数、领先/落后远程状态和最后提交时间
 - 每条可写备注（只存在本机，不进 Git）
 - 右键 worktree 分支可从当前分支创建新的 worktree 分支
   - 新分支名默认 `feature/`，可修改
@@ -14,6 +15,7 @@ Cursor / VS Code 侧边栏插件：列出当前仓库的全部 git worktree，�
   - 创建完成后会把当前分支的 `.cursor` 目录覆盖到新 worktree 的 `.cursor`
 - 右键 worktree 分支可删除该 worktree，带二次确认
   - 可选择仅移除 worktree，或同时强制删除对应分支
+- 右键可执行 `Prune Worktrees`、在终端打开、复制路径
 - 行内按钮：Open in Cursor / Open in IDEA / Edit Note
 
 ## 本地调试
