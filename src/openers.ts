@@ -11,7 +11,15 @@ const OPEN_A_SENTINEL = "__open_a__";
 
 function runExternal(command: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
   const needsShell = process.platform === "win32" && /\.(cmd|bat)$/i.test(command);
-  return execFileAsync(command, args, { shell: needsShell });
+  if (needsShell) {
+    // With `shell: true` Node passes the arguments to cmd.exe verbatim, so a
+    // path containing spaces or `&` would break or be interpreted. Quote each
+    // argument ourselves: Windows paths cannot contain double quotes, so this
+    // is safe for the values this module passes.
+    const quotedArgs = args.map((arg) => `"${arg}"`);
+    return execFileAsync(command, quotedArgs, { shell: true });
+  }
+  return execFileAsync(command, args);
 }
 
 function config(): vscode.WorkspaceConfiguration {

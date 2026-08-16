@@ -8,7 +8,7 @@ Cursor / VS Code 侧边栏插件：列出当前仓库的全部 git worktree，�
   - 当前打开的 worktree 标为 `current`
   - 显示未提交变更数、领先/落后远程状态、upstream 名称和最后提交时间
   - 本地分支与远程分支名不一致时显示 ⚠ 警告
-  - 显示 lock / prunable 状态；锁定/解锁可通过命令面板执行
+  - 显示 lock / prunable 状态
   - 多仓库工作区可选择要展示的仓库
   - 当前窗口获得焦点时自动防抖刷新（可配置）
 - 创建 worktree 向导
@@ -29,12 +29,25 @@ Cursor / VS Code 侧边栏插件：列出当前仓库的全部 git worktree，�
   - Delete Worktree
     - 当前窗口打开的 worktree、主 worktree 禁止删除
     - 有未提交改动、已锁定、分支在其他 worktree 检出时都有前置检查
-  - 为减少右键菜单噪音，`Fetch Remote`、`Open in VS Code`、`Open in Current Window`、`Lock Worktree`、`Unlock Worktree`、`Clear Note` 仅保留在命令面板
 - 批量操作
   - Fetch All Remotes
   - Pull Selected Worktrees（多选，汇总成功/失败）
   - Prune Worktrees（带 dry-run 确认，并清理失效备注）
 - 快速跳转：`Go to Worktree...` 支持按分支名、路径、备注模糊搜索
+
+## 已废弃功能
+
+以下命令已废弃：命令面板调用无法携带具体 worktree 参数，实际不会生效，不再提供支持（相关实现仍保留在 `src/extension.ts`，后续版本清理）：
+
+- `Open in VS Code`
+- `Open in Current Window`（命令面板入口；创建完成后的「Open in Current Window」操作不受影响，仍可用）
+- `Lock Worktree` / `Unlock Worktree`（树中仍显示 lock 状态）
+- `Clear Note`（清空备注即可达到同样效果）
+- `Fetch Remote`（单个 worktree；可用视图标题栏的 Fetch All Remotes 代替）
+
+## 环境要求
+
+- Git ≥ 2.25（创建 worktree 使用 `--track` / `--no-track` 参数）
 
 ## 本地调试
 
@@ -53,7 +66,7 @@ npm test
 npm run package
 ```
 
-推送到 `main` 后，GitHub Actions 会运行测试并打包 VSIX 发布到 [Releases](https://github.com/fanchenggang/worktree-explorer/releases)。
+推送到 `main` 后，GitHub Actions 会运行测试并打包 VSIX；推送 `v*` 标签时会将 VSIX 发布到 [Releases](https://github.com/fanchenggang/worktree-explorer/releases)。
 
 在 Cursor 里：Extensions → `...` → Install from VSIX。
 
@@ -82,7 +95,7 @@ VSCE_PAT=<your-token> npx --yes @vscode/vsce@3.9.2 publish
 | `worktreeExplorer.copyDirs` | `[".cursor"]` | 创建 worktree 时复制的相对设置目录。 |
 | `worktreeExplorer.confirmCopyDirs` | `false` | 复制设置目录前是否确认。 |
 | `worktreeExplorer.noteMaxLength` | `60` | 树中备注显示的最大长度。 |
-| `worktreeExplorer.statusCacheSeconds` | `0` | 状态缓存秒数，0 为禁用。 |
+| `worktreeExplorer.statusCacheSeconds` | `30` | 状态缓存秒数，0 为禁用；焦点/定时刷新复用缓存，手动刷新或 git 操作后立即刷新。 |
 | `worktreeExplorer.statusConcurrency` | `4` | 并行读取 worktree 状态的最大 git 进程数。 |
 
 用 IDEA 打开前，请在 IDEA 中执行 **Tools → Create Command-line Launcher**，或把 `ideaCommand` 设为绝对路径。macOS 会依次尝试配置命令、JetBrains Toolbox `idea` 脚本、`open -a "IntelliJ IDEA"`；Linux/Windows 也会尝试 Toolbox 常见路径。

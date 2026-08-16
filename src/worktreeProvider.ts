@@ -110,6 +110,9 @@ export class WorktreeItem extends vscode.TreeItem {
       if (status.upstreamBranch && this.hasUpstreamNameMismatch()) {
         badges.push(`⚠ upstream ${status.upstreamBranch}`);
       }
+      if (status.upstreamGone) {
+        badges.push("⚠ upstream gone");
+      }
       if (status.lastCommitIso) {
         badges.push(formatAge(status.lastCommitIso));
       }
@@ -159,6 +162,9 @@ export class WorktreeItem extends vscode.TreeItem {
 
       if (status.upstreamBranch && this.hasUpstreamNameMismatch()) {
         lines.push(`warning: tracked remote branch name differs: ${status.upstreamBranch}`);
+      }
+      if (status.upstreamGone) {
+        lines.push("warning: tracked remote branch was deleted");
       }
       if (status.lastCommitIso) {
         lines.push(`last commit: ${new Date(status.lastCommitIso).toLocaleString()}`);

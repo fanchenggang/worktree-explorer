@@ -4,10 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Deprecated
+
+- The palette-only commands (`Open in VS Code`, `Open in Current Window`, `Lock Worktree`, `Unlock Worktree`, `Clear Note`, `Fetch Remote`) receive no worktree argument from the command palette and do nothing; they are now documented as deprecated in the README, and the implementations are kept only until a later cleanup.
+
 ### Changed
 
 - Slim and reorder the worktree context menu: Create Worktree Branch → Pull/Push/Merge → Reveal/Open in Terminal/Copy Path → Delete Worktree.
-- Remove `Fetch Remote` from the context menu; it remains available from the command palette, as do the previously removed commands.
+- Automatic focus/interval refreshes now reuse the status cache instead of clearing it; default `statusCacheSeconds` is 30.
+
+### Fixed
+
+- Resolve symlinks when detecting the current worktree so the current badge, sorting, and the delete-current-worktree guard work when the workspace path differs from git's canonical path (e.g. macOS `/tmp` → `/private/tmp`).
+- Show an `upstream gone` warning for deleted remote branches instead of a misleading `↑0 ↓0`.
+- Strip Windows-invalid trailing dots and spaces from suggested worktree directory names.
+- Quote arguments when launching `.cmd`/`.bat` commands on Windows.
+
+### Hardening
+
+- Set `GIT_TERMINAL_PROMPT=0` for all git subprocesses so git fails fast instead of hanging on an interactive credential prompt.
+- Pull/Push/Fetch/Merge progress notifications are now cancellable; cancelling aborts the underlying git process.
+- Cache `repositoryRoots()` lookups, honor `statusConcurrency` in Pull Selected Worktrees, and dispose the output channel on deactivate.
+- Publish GitHub Releases only for `v*` tags instead of every push to `main`.
 
 ## [0.4.0] - 2026-08-16
 

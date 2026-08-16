@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import test from "node:test";
 import {
   branchFolderName,
   buildAddWorktreeArgs,
   formatAge,
   hasUpstreamNameMismatch,
+  isCurrentWorktree,
   parsePorcelain,
   parseWorktreeStatus,
   shortSha,
@@ -199,7 +203,39 @@ test("formatAge formats recent and older commits", () => {
   assert.equal(formatAge("2026-06-01T12:00:00.000Z", now), "2026-06-01");
 });
 
+test("parseWorktreeStatus detects a deleted upstream branch ([gone])", () => {
+  assert.deepEqual(parseWorktreeStatus("## main...origin/main [gone]"), {
+    changedFiles: 0,
+    ahead: undefined,
+    behind: undefined,
+    hasUpstream: true,
+    upstreamBranch: "origin/main",
+    upstreamGone: true,
+  });
+});
+
+test("isCurrentWorktree resolves symlinked workspace paths", (t) => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "worktree-explorer-"));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+
+  const real = path.join(tmp, "real");
+  fs.mkdirSync(real);
+
+  const link = path.join(tmp, "link");
+  try {
+    fs.symlinkSync(real, link, "dir");
+    assert.equal(isCurrentWorktree(real, link), true);
+  } catch {
+    // Symlinks are unavailable (e.g. Windows without privileges).
+  }
+
+  assert.equal(isCurrentWorktree(real, real), true);
+  assert.equal(isCurrentWorktree(real, path.join(tmp, "other")), false);
+});
+
 test("branchFolderName and shortSha normalize values", () => {
   assert.equal(branchFolderName("feature/my:branch"), "feature-my-branch");
+  assert.equal(branchFolderName("feature/trailing."), "feature-trailing");
+  assert.equal(branchFolderName("feature/trailing "), "feature-trailing");
   assert.equal(shortSha("abcdef1234567"), "abcdef1");
 });

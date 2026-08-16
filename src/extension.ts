@@ -135,6 +135,35 @@ async function showOutputResult(title: string, body: string): Promise<void> {
   }
 }
 
+function isAbortError(error: unknown): boolean {
+  return (
+    (error as { code?: unknown }).code === "ABORT_ERR" ||
+    (error as { name?: unknown }).name === "AbortError"
+  );
+}
+
+/**
+ * Runs a task under a cancellable progress notification and aborts the task's
+ * AbortSignal when the user cancels, so long-running git processes get killed.
+ */
+function withCancellableProgress<T>(
+  title: string,
+  task: (signal: AbortSignal) => Promise<T>
+): Thenable<T> {
+  return vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title,
+      cancellable: true,
+    },
+    (_progress, token) => {
+      const controller = new AbortController();
+      const disposable = token.onCancellationRequested(() => controller.abort());
+      return task(controller.signal).finally(() => disposable.dispose());
+    }
+  );
+}
+
 type CreateMode = "new-current" | "new-local" | "new-remote" | "existing" | "detached";
 
 interface ModeItem extends vscode.QuickPickItem {
@@ -326,18 +355,15 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       try {
-        const result = await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: `Fetching ${String(item.label)}...`,
-            cancellable: false,
-          },
-          () => fetchWorktree(root, item.worktree.path)
+        const result = await withCancellableProgress(`Fetching ${String(item.label)}...`, (signal) =>
+          fetchWorktree(root, item.worktree.path, signal)
         );
         provider.refresh();
         await showOutputResult(`Fetched ${String(item.label)}`, result);
       } catch (error) {
-        showError(error);
+        if (!isAbortError(error)) {
+          showError(error);
+        }
       }
     }),
     vscode.commands.registerCommand("worktreeExplorer.fetchAll", async () => {
@@ -347,18 +373,15 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       try {
-        const result = await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: "Fetching all remotes...",
-            cancellable: false,
-          },
-          () => fetchAllRemotes(root)
+        const result = await withCancellableProgress("Fetching all remotes...", (signal) =>
+          fetchAllRemotes(root, signal)
         );
         provider.refresh();
         await showOutputResult("Fetched all remotes", result);
       } catch (error) {
-        showError(error);
+        if (!isAbortError(error)) {
+          showError(error);
+        }
       }
     }),
     vscode.commands.registerCommand("worktreeExplorer.pullAll", async () => {
@@ -441,7 +464,13 @@ export function activate(context: vscode.ExtensionContext): void {
         }
         await deleteWorktreeCommand(item, notes, provider, repositories);
       }
-    )
+    ),
+    {
+      dispose: () => {
+        outputChannel?.dispose();
+        outputChannel = undefined;
+      },
+    }
   );
 }
 
@@ -780,22 +809,24 @@ async function promptNewBranchName(
   return branch?.trim();
 }
 
-function createBranchValidator(root: string): (value: string) => Promise<string | undefined> {
+function debouncedValidate(
+  validate: (value: string) => Promise<string | undefined>,
+  delayMs: number
+): (value: string) => Promise<string | undefined> {
   let timer: NodeJS.Timeout | undefined;
   return (value) =>
-    new Promise<string | undefined>((resolve) => {
+    new Promise((resolve) => {
       if (timer) {
         clearTimeout(timer);
       }
-      timer = setTimeout(async () => {
-        const branch = value.trim();
-        try {
-          resolve(await validateBranchName(root, branch));
-        } catch (error) {
-          resolve(errorMessage(error));
-        }
-      }, 250);
+      timer = setTimeout(() => {
+        void validate(value).then(resolve, (error: unknown) => resolve(errorMessage(error)));
+      }, delayMs);
     });
+}
+
+function createBranchValidator(root: string): (value: string) => Promise<string | undefined> {
+  return debouncedValidate((value) => validateBranchName(root, value.trim()), 250);
 }
 
 async function promptWorktreeDirectory(
@@ -804,13 +835,17 @@ async function promptWorktreeDirectory(
   worktrees: import("./gitWorktreeCore").GitWorktree[]
 ): Promise<string | undefined> {
   const suggested = path.join(root, branchFolderName(folderName));
+  const validateDirectory = debouncedValidate(
+    (value) => validateWorktreeDirectory(root, value, worktrees),
+    200
+  );
   const directory = await vscode.window.showInputBox({
     title: "Worktree Directory",
     prompt: "Absolute directory for the new worktree",
     value: suggested,
     valueSelection: [0, suggested.length],
     ignoreFocusOut: true,
-    validateInput: (value) => validateWorktreeDirectory(root, value, worktrees),
+    validateInput: validateDirectory,
   });
   return directory ? path.resolve(directory.trim()) : undefined;
 }
@@ -1003,18 +1038,15 @@ async function pullWorktreeCommand(item: WorktreeItem, provider: WorktreeProvide
       }
     }
 
-    const result = await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: `Pulling ${String(item.label)}...`,
-        cancellable: false,
-      },
-      () => pullWorktree(root, item.worktree.path)
+    const result = await withCancellableProgress(`Pulling ${String(item.label)}...`, (signal) =>
+      pullWorktree(root, item.worktree.path, signal)
     );
     provider.refresh();
     await showOutputResult(`Pulled ${String(item.label)}`, result);
   } catch (error) {
-    showError(error);
+    if (!isAbortError(error)) {
+      showError(error);
+    }
   }
 }
 
@@ -1094,7 +1126,7 @@ async function pushWorktreeCommand(item: WorktreeItem, provider: WorktreeProvide
   try {
     const branch = item.worktree.branch;
     const hasUpstream = (await getUpstream(root, item.worktree.path)) !== undefined;
-    let pushTask: () => Promise<string>;
+    let pushTask: (signal: AbortSignal) => Promise<string>;
     let successFallback: string;
 
     if (hasUpstream === false) {
@@ -1125,25 +1157,22 @@ async function pushWorktreeCommand(item: WorktreeItem, provider: WorktreeProvide
         return;
       }
 
-      pushTask = () => pushNewBranch(root, item.worktree.path, remote, branch);
+      pushTask = (signal) => pushNewBranch(root, item.worktree.path, remote, branch, signal);
       successFallback = `Pushed ${branch} to ${remote}.`;
     } else {
-      pushTask = () => pushWorktree(root, item.worktree.path);
+      pushTask = (signal) => pushWorktree(root, item.worktree.path, signal);
       successFallback = `Pushed ${String(item.label)} to remote.`;
     }
 
-    const result = await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: `Pushing ${String(item.label)}...`,
-        cancellable: false,
-      },
-      pushTask
+    const result = await withCancellableProgress(`Pushing ${String(item.label)}...`, (signal) =>
+      pushTask(signal)
     );
     provider.refresh();
     await showOutputResult(`Pushed ${String(item.label)}`, result || successFallback);
   } catch (error) {
-    showError(error);
+    if (!isAbortError(error)) {
+      showError(error);
+    }
   }
 }
 
@@ -1184,18 +1213,16 @@ async function mergeBranchCommand(item: WorktreeItem, provider: WorktreeProvider
       return;
     }
 
-    const result = await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: `Merging ${sourceBranch} into ${item.worktree.branch}...`,
-        cancellable: false,
-      },
-      () => mergeBranch(root, item.worktree.path, sourceBranch)
+    const result = await withCancellableProgress(
+      `Merging ${sourceBranch} into ${item.worktree.branch}...`,
+      (signal) => mergeBranch(root, item.worktree.path, sourceBranch, signal)
     );
     provider.refresh();
     await showOutputResult(`Merged ${sourceBranch} into ${item.worktree.branch}`, result);
   } catch (error) {
-    showError(error);
+    if (!isAbortError(error)) {
+      showError(error);
+    }
   }
 }
 
@@ -1314,7 +1341,8 @@ async function pullAllCommand(
       return;
     }
 
-    const statuses = await getWorktreeStatuses(root, candidates, 4);
+    const concurrency = configuration().get<number>("statusConcurrency", 4);
+    const statuses = await getWorktreeStatuses(root, candidates, concurrency);
     const pullable = candidates.filter((worktree) => statuses.get(worktree.path)?.hasUpstream);
     if (pullable.length === 0) {
       void vscode.window.showInformationMessage(
@@ -1343,16 +1371,16 @@ async function pullAllCommand(
     for (let index = 0; index < selected.length; index += 1) {
       const entry = selected[index];
       try {
-        const result = await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: `Pulling ${entry.label} (${index + 1}/${selected.length})...`,
-            cancellable: false,
-          },
-          () => pullWorktree(root, entry.worktree.path)
+        const result = await withCancellableProgress(
+          `Pulling ${entry.label} (${index + 1}/${selected.length})...`,
+          (signal) => pullWorktree(root, entry.worktree.path, signal)
         );
         successes.push(`${entry.label}: ${result || "up to date"}`);
       } catch (error) {
+        if (isAbortError(error)) {
+          provider.refresh();
+          return;
+        }
         failures.push(`${entry.label}: ${errorMessage(error)}`);
       }
     }
@@ -1462,7 +1490,10 @@ function installAutoRefresh(provider: WorktreeProvider): vscode.Disposable {
     const mode = configuration().get<string>("autoRefresh", "onFocus");
     if (mode === "interval") {
       const seconds = Math.max(5, configuration().get<number>("refreshIntervalSeconds", 60));
-      interval = setInterval(() => provider.refresh(true), seconds * 1000);
+      // Do not clear the status cache: TTL-based caching keeps these
+      // automatic refreshes cheap. Mutating commands call refresh() and
+      // explicitly clear the cache.
+      interval = setInterval(() => provider.refresh(false), seconds * 1000);
     }
   }
 
@@ -1473,7 +1504,7 @@ function installAutoRefresh(provider: WorktreeProvider): vscode.Disposable {
     if (focusTimer) {
       clearTimeout(focusTimer);
     }
-    focusTimer = setTimeout(() => provider.refresh(true), 800);
+    focusTimer = setTimeout(() => provider.refresh(false), 800);
   });
 
   const configDisposable = vscode.workspace.onDidChangeConfiguration((event) => {

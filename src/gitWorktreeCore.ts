@@ -1,3 +1,6 @@
+import * as fs from "fs";
+import * as path from "path";
+
 export interface GitWorktree {
   path: string;
   head: string;
@@ -17,6 +20,7 @@ export interface WorktreeStatus {
   behind?: number;
   hasUpstream: boolean;
   upstreamBranch?: string;
+  upstreamGone?: boolean;
   lastCommitIso?: string;
 }
 
@@ -88,7 +92,30 @@ export function shortSha(head: string): string {
 }
 
 export function branchFolderName(branch: string): string {
-  return branch.trim().replace(/[\\/:*?"<>|]/g, "-");
+  // Also strip trailing dots and spaces, which are invalid on Windows.
+  return branch.trim().replace(/[\\/:*?"<>|]/g, "-").replace(/[. ]+$/, "");
+}
+
+/**
+ * Compares a worktree path with a workspace path, resolving symlinks on both
+ * sides first. Git canonicalizes paths in its output (e.g. macOS `/tmp` is
+ * reported as `/private/tmp`), while VS Code keeps the path the user opened,
+ * so a plain string comparison would miss the match.
+ */
+export function isCurrentWorktree(worktreePath: string, workspacePath: string): boolean {
+  return canonicalPath(worktreePath) === canonicalPath(workspacePath);
+}
+
+export function isCurrentWorktreeIn(worktreePath: string, workspacePaths: string[]): boolean {
+  return workspacePaths.some((workspacePath) => isCurrentWorktree(worktreePath, workspacePath));
+}
+
+function canonicalPath(value: string): string {
+  try {
+    return fs.realpathSync.native(value);
+  } catch {
+    return path.resolve(value);
+  }
 }
 
 export function parseWorktreeStatus(
@@ -104,6 +131,7 @@ export function parseWorktreeStatus(
   const ahead = branchLine?.match(/ahead\s+(\d+)/)?.[1];
   const behind = branchLine?.match(/behind\s+(\d+)/)?.[1];
   const branchInfo = parseBranchLine(branchLine);
+  const upstreamGone = branchLine?.includes("[gone]") ?? false;
 
   return {
     changedFiles,
@@ -111,6 +139,7 @@ export function parseWorktreeStatus(
     behind: behind ? Number(behind) : undefined,
     hasUpstream: branchInfo.hasUpstream,
     ...(branchInfo.upstreamBranch ? { upstreamBranch: branchInfo.upstreamBranch } : {}),
+    ...(upstreamGone ? { upstreamGone: true } : {}),
   };
 }
 

@@ -14,6 +14,8 @@ export {
   GitWorktree,
   WorktreeStatus,
   branchFolderName,
+  isCurrentWorktree,
+  isCurrentWorktreeIn,
   parsePorcelain,
   parseWorktreeStatus,
   shortSha,
@@ -23,6 +25,7 @@ const execFileAsync = promisify(execFile);
 
 export interface GitRunOptions {
   timeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 export async function runGit(
@@ -35,9 +38,16 @@ export async function runGit(
       cwd,
       encoding: "utf8",
       timeout: options.timeoutMs,
+      signal: options.signal,
+      // Never let git block on an interactive credential prompt: with no TTY
+      // the prompt can hang forever instead of failing.
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
     });
     return stdout.trim();
   } catch (error) {
+    if ((error as { code?: string }).code === "ABORT_ERR") {
+      throw error;
+    }
     const stderr = (error as { stderr?: string }).stderr?.trim();
     throw new Error(stderr || `git ${args.join(" ")} failed`, { cause: error });
   }
@@ -68,7 +78,21 @@ export function workspaceRoots(): string[] {
   return (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
 }
 
+let cachedRepositoryRoots: { roots: string[]; expires: number } | undefined;
+const REPOSITORY_ROOTS_CACHE_MS = 30_000;
+
 export async function repositoryRoots(): Promise<string[]> {
+  const now = Date.now();
+  const cached = cachedRepositoryRoots;
+  if (cached && cached.expires > now) {
+    return cached.roots;
+  }
+  const roots = await computeRepositoryRoots();
+  cachedRepositoryRoots = { roots, expires: Date.now() + REPOSITORY_ROOTS_CACHE_MS };
+  return roots;
+}
+
+async function computeRepositoryRoots(): Promise<string[]> {
   const roots = workspaceRoots();
   const unique = new Map<string, string>();
   await Promise.all(
@@ -93,14 +117,6 @@ export async function repositoryRoots(): Promise<string[]> {
     })
   );
   return [...unique.values()];
-}
-
-export function isCurrentWorktree(worktreePath: string, workspacePath: string): boolean {
-  return path.resolve(worktreePath) === path.resolve(workspacePath);
-}
-
-export function isCurrentWorktreeIn(worktreePath: string, workspacePaths: string[]): boolean {
-  return workspacePaths.some((workspacePath) => isCurrentWorktree(worktreePath, workspacePath));
 }
 
 export async function currentBranch(cwd: string): Promise<string> {
@@ -236,21 +252,30 @@ export async function unlockWorktree(cwd: string, worktreePath: string): Promise
   await runGit(cwd, ["worktree", "unlock", worktreePath]);
 }
 
-export async function pullWorktree(cwd: string, worktreePath: string): Promise<string> {
-  return runGit(cwd, ["-C", worktreePath, "pull", "--no-edit"]);
+export async function pullWorktree(
+  cwd: string,
+  worktreePath: string,
+  signal?: AbortSignal
+): Promise<string> {
+  return runGit(cwd, ["-C", worktreePath, "pull", "--no-edit"], { signal });
 }
 
-export async function pushWorktree(cwd: string, worktreePath: string): Promise<string> {
-  return runGit(cwd, ["-C", worktreePath, "push"]);
+export async function pushWorktree(
+  cwd: string,
+  worktreePath: string,
+  signal?: AbortSignal
+): Promise<string> {
+  return runGit(cwd, ["-C", worktreePath, "push"], { signal });
 }
 
 export async function pushNewBranch(
   cwd: string,
   worktreePath: string,
   remote: string,
-  branch: string
+  branch: string,
+  signal?: AbortSignal
 ): Promise<string> {
-  return runGit(cwd, ["-C", worktreePath, "push", "-u", remote, branch]);
+  return runGit(cwd, ["-C", worktreePath, "push", "-u", remote, branch], { signal });
 }
 
 export async function listRemotes(cwd: string): Promise<string[]> {
@@ -288,20 +313,25 @@ export async function setUpstream(
   ]);
 }
 
-export async function fetchAllRemotes(cwd: string): Promise<string> {
-  return runGit(cwd, ["fetch", "--all", "--prune"]);
+export async function fetchAllRemotes(cwd: string, signal?: AbortSignal): Promise<string> {
+  return runGit(cwd, ["fetch", "--all", "--prune"], { signal });
 }
 
-export async function fetchWorktree(cwd: string, worktreePath: string): Promise<string> {
-  return runGit(cwd, ["-C", worktreePath, "fetch", "--all", "--prune"]);
+export async function fetchWorktree(
+  cwd: string,
+  worktreePath: string,
+  signal?: AbortSignal
+): Promise<string> {
+  return runGit(cwd, ["-C", worktreePath, "fetch", "--all", "--prune"], { signal });
 }
 
 export async function mergeBranch(
   cwd: string,
   worktreePath: string,
-  branch: string
+  branch: string,
+  signal?: AbortSignal
 ): Promise<string> {
-  return runGit(cwd, ["-C", worktreePath, "merge", "--no-edit", branch]);
+  return runGit(cwd, ["-C", worktreePath, "merge", "--no-edit", branch], { signal });
 }
 
 export async function deleteBranch(cwd: string, branch: string): Promise<void> {
