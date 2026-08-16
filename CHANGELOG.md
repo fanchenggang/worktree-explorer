@@ -4,12 +4,30 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-16
+
 ### Added
 
-- Pull remote updates into a worktree from its context menu (`worktreeExplorer.pull`).
-- Push local changes to the remote branch from the context menu (`worktreeExplorer.push`), with remote selection when the branch has no upstream.
-- Merge another local branch into the selected worktree branch (`worktreeExplorer.mergeBranch`).
-- Show a warning when a local branch tracks a remote branch with a different name.
+- Reworked Create Worktree into a guided flow: base can be the clicked worktree branch, any local branch, a remote branch, an existing branch, or a detached commit/tag.
+- Tracking is opt-in: creation defaults to `--no-track`; `--track` is only offered for remote starting points.
+- Fetch-before-create and configurable settings-directory copy (`.cursor` by default).
+- Directory preflight validation: absolute path, existing parent, empty target, and no overlap with existing worktrees.
+- Worktree lock/unlock with optional reason, and lock/prunable badges in the tree.
+- Pull upstream preflight with optional upstream setup and OutputChannel result logging.
+- Fetch All Remotes and multi-select Pull Selected Worktrees.
+- Go to Worktree quick pick with branch/path/note search.
+- Open in VS Code, Open in Current Window, and Reveal in File Explorer actions.
+- Auto refresh on window focus or interval, sorting, status cache, and status concurrency settings.
+- Multi-repository workspace selection.
+- Expanded IDEA/Toolbox detection on macOS, Linux, and Windows.
+- Unit tests for `--track`/`--no-track` argument construction and notes store, plus a real git integration test.
+
+### Changed
+
+- Delete Worktree now blocks the current worktree and the main worktree, warns about uncommitted changes, and checks whether the branch is checked out elsewhere.
+- Status reads are limited to a configurable concurrency and have an optional TTL cache.
+- Manifest command and configuration titles are localized in English and Simplified Chinese.
+- CI now runs ESLint, type-check, and tests before packaging or publishing.
 
 ## [0.3.0] - 2026-08-16
 

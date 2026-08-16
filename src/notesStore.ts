@@ -1,9 +1,12 @@
-import * as vscode from "vscode";
-
 const KEY = "worktreeExplorer.notes";
 
+export interface MementoLike {
+  get<T>(key: string, defaultValue: T): T;
+  update(key: string, value: unknown): Thenable<void>;
+}
+
 export class NotesStore {
-  constructor(private readonly memento: vscode.Memento) {}
+  constructor(private readonly memento: MementoLike) {}
 
   get(worktreePath: string): string {
     return this.getAll()[worktreePath] ?? "";
@@ -22,7 +25,7 @@ export class NotesStore {
 
   async delete(worktreePath: string): Promise<void> {
     const all = { ...this.getAll() };
-    if (!(worktreePath in all)) {
+    if ((worktreePath in all) === false) {
       return;
     }
     delete all[worktreePath];
@@ -33,7 +36,7 @@ export class NotesStore {
     const all = { ...this.getAll() };
     let changed = false;
     for (const worktreePath of Object.keys(all)) {
-      if (!validPaths.has(worktreePath)) {
+      if (validPaths.has(worktreePath) === false) {
         delete all[worktreePath];
         changed = true;
       }

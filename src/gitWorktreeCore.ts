@@ -4,6 +4,10 @@ export interface GitWorktree {
   branch?: string;
   detached: boolean;
   bare: boolean;
+  locked: boolean;
+  lockReason?: string;
+  prunable: boolean;
+  main: boolean;
   status?: WorktreeStatus;
 }
 
@@ -28,6 +32,11 @@ export function parsePorcelain(output: string): GitWorktree[] {
         branch: current.branch,
         detached: current.detached ?? false,
         bare: current.bare ?? false,
+        locked: current.locked ?? false,
+        lockReason: current.lockReason,
+        prunable: current.prunable ?? false,
+        // The main worktree is always listed first by `git worktree list`.
+        main: worktrees.length === 0,
       });
     }
     current = undefined;
@@ -56,6 +65,18 @@ export function parsePorcelain(output: string): GitWorktree[] {
       if (current) {
         current.bare = true;
       }
+    } else if (line.startsWith("locked")) {
+      if (current) {
+        current.locked = true;
+        const reason = line.slice("locked".length).trim();
+        if (reason) {
+          current.lockReason = reason;
+        }
+      }
+    } else if (line.startsWith("prunable")) {
+      if (current) {
+        current.prunable = true;
+      }
     }
   }
   flush();
@@ -78,7 +99,7 @@ export function parseWorktreeStatus(
     .map((line) => line.trim())
     .filter(Boolean);
   const branchLine = lines.find((line) => line.startsWith("##"));
-  const changedFiles = lines.filter((line) => !line.startsWith("##")).length;
+  const changedFiles = lines.filter((line) => line.startsWith("##") === false).length;
 
   const ahead = branchLine?.match(/ahead\s+(\d+)/)?.[1];
   const behind = branchLine?.match(/behind\s+(\d+)/)?.[1];
@@ -96,7 +117,7 @@ export function parseWorktreeStatus(
 function parseBranchLine(
   branchLine: string | undefined
 ): { hasUpstream: boolean; upstreamBranch?: string } {
-  if (!branchLine) {
+  if (branchLine === undefined) {
     return { hasUpstream: false };
   }
 
@@ -107,7 +128,7 @@ function parseBranchLine(
   }
 
   const upstreamBranch = normalized.slice(separator + 3).split(/\s+/, 1)[0];
-  if (!upstreamBranch) {
+  if (upstreamBranch === undefined) {
     return { hasUpstream: false };
   }
 
@@ -127,8 +148,38 @@ export function hasUpstreamNameMismatch(
   return localBranch !== upstreamBranchShortName(upstreamBranch);
 }
 
+/**
+ * Builds `git worktree add` arguments for creating a new branch.
+ *
+ * Tracking is opt-in: the default is `--no-track`. `--track` is only
+ * honored for remote-tracking starting points; a local branch base always
+ * stays `--no-track` even if a caller passes `track: true`.
+ */
+export function buildAddWorktreeArgs(options: {
+  branch: string;
+  worktreePath: string;
+  baseBranch: string;
+  track: boolean;
+  baseIsRemote: boolean;
+}): string[] {
+  const trackingArg = options.track && options.baseIsRemote ? "--track" : "--no-track";
+  return [
+    "worktree",
+    "add",
+    trackingArg,
+    "-b",
+    options.branch,
+    options.worktreePath,
+    options.baseBranch,
+  ];
+}
+
 export function formatAge(iso: string, now: Date = new Date()): string {
   const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
   const elapsedMs = Math.max(0, now.getTime() - date.getTime());
   const seconds = Math.floor(elapsedMs / 1000);
 

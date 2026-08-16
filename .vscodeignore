@@ -7,3 +7,4 @@ tsconfig.json
 **/*.test.js
 node_modules/**
 **/*.ts
+eslint.config.mjs

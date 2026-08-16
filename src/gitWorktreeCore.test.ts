@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   branchFolderName,
+  buildAddWorktreeArgs,
   formatAge,
   hasUpstreamNameMismatch,
   parsePorcelain,
@@ -10,7 +11,7 @@ import {
   upstreamBranchShortName,
 } from "./gitWorktreeCore";
 
-test("parsePorcelain parses branch, detached, and bare worktrees", () => {
+test("parsePorcelain parses branch, detached, bare, locked, and prunable worktrees", () => {
   const worktrees = parsePorcelain(
     [
       "worktree /repo",
@@ -29,16 +30,30 @@ test("parsePorcelain parses branch, detached, and bare worktrees", () => {
       "HEAD fedcba1",
       "bare",
       "",
+      "worktree /repo/locked",
+      "HEAD 1111111",
+      "branch refs/heads/locked-branch",
+      "locked keep this one",
+      "",
+      "worktree /repo/prunable",
+      "HEAD 2222222",
+      "branch refs/heads/gone",
+      "prunable gitdir file points to non-existent location",
+      "",
     ].join("\n")
   );
 
-  assert.equal(worktrees.length, 4);
+  assert.equal(worktrees.length, 6);
   assert.deepEqual(worktrees[0], {
     path: "/repo",
     head: "abcdef1234567",
     branch: "main",
     detached: false,
     bare: false,
+    locked: false,
+    lockReason: undefined,
+    prunable: false,
+    main: true,
   });
   assert.deepEqual(worktrees[1], {
     path: "/repo/feature",
@@ -46,6 +61,10 @@ test("parsePorcelain parses branch, detached, and bare worktrees", () => {
     branch: "feature/x",
     detached: false,
     bare: false,
+    locked: false,
+    lockReason: undefined,
+    prunable: false,
+    main: false,
   });
   assert.deepEqual(worktrees[2], {
     path: "/repo/detached",
@@ -53,6 +72,10 @@ test("parsePorcelain parses branch, detached, and bare worktrees", () => {
     branch: undefined,
     detached: true,
     bare: false,
+    locked: false,
+    lockReason: undefined,
+    prunable: false,
+    main: false,
   });
   assert.deepEqual(worktrees[3], {
     path: "/repo/bare",
@@ -60,7 +83,62 @@ test("parsePorcelain parses branch, detached, and bare worktrees", () => {
     branch: undefined,
     detached: false,
     bare: true,
+    locked: false,
+    lockReason: undefined,
+    prunable: false,
+    main: false,
   });
+  assert.equal(worktrees[4].locked, true);
+  assert.equal(worktrees[4].lockReason, "keep this one");
+  assert.equal(worktrees[5].prunable, true);
+});
+
+test("buildAddWorktreeArgs defaults to --no-track and never tracks a local base", () => {
+  assert.deepEqual(
+    buildAddWorktreeArgs({
+      branch: "feature/x",
+      worktreePath: "/repo/feature-x",
+      baseBranch: "main",
+      track: false,
+      baseIsRemote: false,
+    }),
+    ["worktree", "add", "--no-track", "-b", "feature/x", "/repo/feature-x", "main"]
+  );
+
+  assert.deepEqual(
+    buildAddWorktreeArgs({
+      branch: "feature/x",
+      worktreePath: "/repo/feature-x",
+      baseBranch: "main",
+      track: true,
+      baseIsRemote: false,
+    }),
+    ["worktree", "add", "--no-track", "-b", "feature/x", "/repo/feature-x", "main"]
+  );
+});
+
+test("buildAddWorktreeArgs opts into --track only for remote bases", () => {
+  assert.deepEqual(
+    buildAddWorktreeArgs({
+      branch: "feature/x",
+      worktreePath: "/repo/feature-x",
+      baseBranch: "origin/feature/x",
+      track: false,
+      baseIsRemote: true,
+    }),
+    ["worktree", "add", "--no-track", "-b", "feature/x", "/repo/feature-x", "origin/feature/x"]
+  );
+
+  assert.deepEqual(
+    buildAddWorktreeArgs({
+      branch: "feature/x",
+      worktreePath: "/repo/feature-x",
+      baseBranch: "origin/feature/x",
+      track: true,
+      baseIsRemote: true,
+    }),
+    ["worktree", "add", "--track", "-b", "feature/x", "/repo/feature-x", "origin/feature/x"]
+  );
 });
 
 test("parseWorktreeStatus parses changes and ahead/behind", () => {
