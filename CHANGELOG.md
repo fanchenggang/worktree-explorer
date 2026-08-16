@@ -2,22 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.5.0] - 2026-08-16
 
-### Deprecated
+### Added
 
-- The palette-only commands (`Open in VS Code`, `Open in Current Window`, `Lock Worktree`, `Unlock Worktree`, `Clear Note`, `Fetch Remote`) receive no worktree argument from the command palette and do nothing; they are now documented as deprecated in the README, and the implementations are kept only until a later cleanup.
+- Full UI localization: all user-facing messages now go through VS Code l10n with an English bundle and a Simplified Chinese bundle.
+- An end-to-end smoke test (`npm run test:e2e`) that boots a real VS Code extension host against a disposable git fixture with a linked worktree.
+- Type-aware ESLint checks (recommendedTypeChecked) in the lint pipeline.
 
-### Changed
+### Removed
 
-- Slim and reorder the worktree context menu: Create Worktree Branch → Merge/Pull/Push → Reveal/Open in Terminal/Copy Path → Delete Worktree.
-- Automatic focus/interval refreshes now reuse the status cache instead of clearing it; default `statusCacheSeconds` is 30.
+- Delete the palette-only commands (`Open in VS Code`, `Open in Current Window`, `Lock Worktree`, `Unlock Worktree`, `Clear Note`, `Fetch Remote`), which received no worktree argument from the command palette and did nothing. `Open in Current Window` remains available as a post-create action and in Go to Worktree.
 
 ### Fixed
 
+- Do not offer branches still checked out in prunable worktrees; git rejects `worktree add` for them until the stale metadata is pruned.
+- Hide Pull/Push/Merge on prunable worktrees and make Create Worktree fall back to the selected repository when launched from one.
+- Respect the built-in `git.path` setting and discover bare repositories opened as workspace roots.
+- Refresh the repository list when workspace folders are added or removed.
 - Resolve symlinks when detecting the current worktree so the current badge, sorting, and the delete-current-worktree guard work when the workspace path differs from git's canonical path (e.g. macOS `/tmp` → `/private/tmp`).
 - Show an `upstream gone` warning for deleted remote branches instead of a misleading `↑0 ↓0`.
 - Strip Windows-invalid trailing dots and spaces from suggested worktree directory names.
+
+### Changed
+
+- The `--track` choice is now a plain two-option picker instead of a check-item quick pick.
+- Pull Selected Worktrees shows one progress notification for the whole batch.
+- Worktrees whose status read failed now show "status unavailable" instead of silently looking clean.
+- External launcher commands get a timeout, and Windows shell commands are quoted properly.
+- Slim and reorder the worktree context menu: Create Worktree Branch → Merge/Pull/Push → Reveal/Open in Terminal/Copy Path → Delete Worktree.
+- Automatic focus/interval refreshes now reuse the status cache instead of clearing it; default `statusCacheSeconds` is 30.
+- Clean up manifest metadata (icon, keywords, bugs, SCM Providers category) and redundant activation events.
 - Quote arguments when launching `.cmd`/`.bat` commands on Windows.
 
 ### Hardening

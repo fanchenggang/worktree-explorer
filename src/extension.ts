@@ -3,7 +3,6 @@ import * as fs from "fs";
 import * as path from "path";
 import { NotesStore } from "./notesStore";
 import {
-  openInCode,
   openInCursor,
   openInCurrentWindow,
   openInIdea,
@@ -15,21 +14,21 @@ import {
   addExistingWorktree,
   addWorktree,
   branchFolderName,
+  checkedOutBranches,
   currentBranch,
   deleteBranch,
   dryRunPrune,
   fetchAllRemotes,
-  fetchWorktree,
   findBranchWorktree,
   getUpstream,
   getWorktreeStatuses,
+  invalidateRepositoryRootsCache,
   isCommitish,
   isRemoteBranch,
   listLocalBranches,
   listRemoteBranches,
   listRemotes,
   listWorktrees,
-  lockWorktree,
   mergeBranch,
   pruneWorktrees,
   pullWorktree,
@@ -41,10 +40,11 @@ import {
   setUpstream,
   unlockWorktree,
   validateBranchName,
-  workspaceRoot,
 } from "./gitWorktree";
 
 const SELECTED_REPOSITORY_KEY = "worktreeExplorer.selectedRepository";
+
+const t = vscode.l10n.t;
 
 function configuration(): vscode.WorkspaceConfiguration {
   return vscode.workspace.getConfiguration("worktreeExplorer");
@@ -52,6 +52,11 @@ function configuration(): vscode.WorkspaceConfiguration {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Text label of a worktree item; the base type allows a rich TreeItemLabel. */
+function labelOf(item: WorktreeItem): string {
+  return item.label as string;
 }
 
 function showError(error: unknown): void {
@@ -64,7 +69,9 @@ class RepositoryManager {
   async current(): Promise<string | undefined> {
     const roots = await repositoryRoots();
     if (roots.length === 0) {
-      return workspaceRoot();
+      // Let the tree show its welcome message instead of running git in a
+      // non-repository folder and surfacing a raw git error.
+      return undefined;
     }
 
     const selected = this.memento.get<string>(SELECTED_REPOSITORY_KEY, "");
@@ -80,7 +87,7 @@ class RepositoryManager {
   async select(): Promise<string | undefined> {
     const roots = await repositoryRoots();
     if (roots.length === 0) {
-      void vscode.window.showErrorMessage("No Git repository is open in this window.");
+      void vscode.window.showErrorMessage(t("No Git repository is open in this window."));
       return undefined;
     }
 
@@ -90,8 +97,8 @@ class RepositoryManager {
       root,
     }));
     const selected = await vscode.window.showQuickPick(items, {
-      title: "Select Repository",
-      placeHolder: "Choose the Git repository to show in the Worktrees view",
+      title: t("Select Repository"),
+      placeHolder: t("Choose the Git repository to show in the Worktrees view"),
       ignoreFocusOut: true,
     });
     if (!selected) {
@@ -107,7 +114,7 @@ let outputChannel: vscode.OutputChannel | undefined;
 
 function output(): vscode.OutputChannel {
   if (!outputChannel) {
-    outputChannel = vscode.window.createOutputChannel("Worktree Explorer");
+    outputChannel = vscode.window.createOutputChannel(t("Worktree Explorer"));
   }
   return outputChannel;
 }
@@ -124,13 +131,13 @@ function appendOutput(title: string, body: string): void {
 async function showOutputResult(title: string, body: string): Promise<void> {
   appendOutput(title, body);
   const choice = await vscode.window.showInformationMessage(
-    `${title}. Details are in the Worktree Explorer output.`,
-    "Open Output",
-    "Copy Output"
+    t("{0}. Details are in the Worktree Explorer output.", title),
+    t("Open Output"),
+    t("Copy Output")
   );
-  if (choice === "Open Output") {
+  if (choice === t("Open Output")) {
     output().show(true);
-  } else if (choice === "Copy Output") {
+  } else if (choice === t("Copy Output")) {
     await vscode.env.clipboard.writeText(body);
   }
 }
@@ -159,7 +166,9 @@ function withCancellableProgress<T>(
     (_progress, token) => {
       const controller = new AbortController();
       const disposable = token.onCancellationRequested(() => controller.abort());
-      return task(controller.signal).finally(() => disposable.dispose());
+      return task(controller.signal).finally(() => {
+        disposable.dispose();
+      });
     }
   );
 }
@@ -182,17 +191,16 @@ export function activate(context: vscode.ExtensionContext): void {
     getRepositoryRoot: () => repositories.current(),
   });
 
-  async function rootForCommand(item?: WorktreeItem): Promise<string | undefined> {
-    if (item) {
-      return item.worktree.path;
-    }
-    return repositories.current();
-  }
-
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider("worktreeExplorer.list", provider),
     vscode.commands.registerCommand("worktreeExplorer.refresh", () => provider.refresh()),
     installAutoRefresh(provider),
+    // The repository list depends on the open workspace folders; a fresh
+    // lookup would otherwise be delayed by the 30s cache.
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      invalidateRepositoryRootsCache();
+      provider.refresh(false);
+    }),
     vscode.commands.registerCommand("worktreeExplorer.selectRepository", async () => {
       try {
         await repositories.select();
@@ -211,16 +219,6 @@ export function activate(context: vscode.ExtensionContext): void {
         showError(error);
       }
     }),
-    vscode.commands.registerCommand("worktreeExplorer.openCode", async (item?: WorktreeItem) => {
-      if (!item) {
-        return;
-      }
-      try {
-        await openInCode(item.worktree.path);
-      } catch (error) {
-        showError(error);
-      }
-    }),
     vscode.commands.registerCommand("worktreeExplorer.openIdea", async (item?: WorktreeItem) => {
       if (!item) {
         return;
@@ -231,19 +229,6 @@ export function activate(context: vscode.ExtensionContext): void {
         showError(error);
       }
     }),
-    vscode.commands.registerCommand(
-      "worktreeExplorer.openCurrentWindow",
-      async (item?: WorktreeItem) => {
-        if (!item) {
-          return;
-        }
-        try {
-          await openInCurrentWindow(item.worktree.path);
-        } catch (error) {
-          showError(error);
-        }
-      }
-    ),
     vscode.commands.registerCommand("worktreeExplorer.revealInOS", async (item?: WorktreeItem) => {
       if (!item) {
         return;
@@ -259,10 +244,10 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       const value = await vscode.window.showInputBox({
-        title: "Worktree note",
-        prompt: `Note for ${String(item.label)}`,
+        title: t("Worktree note"),
+        prompt: t("Note for {0}", labelOf(item)),
         value: item.note,
-        placeHolder: "What is this branch for? Leave empty to clear the note.",
+        placeHolder: t("What is this branch for? Leave empty to clear the note."),
       });
       if (value === undefined) {
         return;
@@ -270,22 +255,15 @@ export function activate(context: vscode.ExtensionContext): void {
       await notes.set(item.worktree.path, value);
       provider.refresh(false);
     }),
-    vscode.commands.registerCommand("worktreeExplorer.clearNote", async (item?: WorktreeItem) => {
-      if (!item) {
-        return;
-      }
-      await notes.delete(item.worktree.path);
-      provider.refresh(false);
-    }),
     vscode.commands.registerCommand(
       "worktreeExplorer.openTerminal",
-      async (item?: WorktreeItem) => {
+      (item?: WorktreeItem) => {
         if (!item) {
           return;
         }
         const terminal = vscode.window.createTerminal({
           cwd: item.worktree.path,
-          name: String(item.label),
+          name: labelOf(item),
         });
         terminal.show();
       }
@@ -295,28 +273,28 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       await vscode.env.clipboard.writeText(item.worktree.path);
-      void vscode.window.showInformationMessage(`Copied ${item.worktree.path}`);
+      void vscode.window.showInformationMessage(t("Copied {0}", item.worktree.path));
     }),
     vscode.commands.registerCommand("worktreeExplorer.prune", async () => {
       const root = await repositories.current();
       if (!root) {
-        void vscode.window.showErrorMessage("No workspace folder is open.");
+        void vscode.window.showErrorMessage(t("No workspace folder is open."));
         return;
       }
 
       try {
         const dryRun = await dryRunPrune(root);
         if (!dryRun) {
-          void vscode.window.showInformationMessage("Nothing to prune.");
+          void vscode.window.showInformationMessage(t("Nothing to prune."));
           return;
         }
 
         const choice = await vscode.window.showWarningMessage(
-          "Remove stale worktree metadata?",
+          t("Remove stale worktree metadata?"),
           { modal: true },
-          "Prune Worktrees"
+          t("Prune Worktrees")
         );
-        if (choice !== "Prune Worktrees") {
+        if (choice !== t("Prune Worktrees")) {
           return;
         }
 
@@ -324,7 +302,7 @@ export function activate(context: vscode.ExtensionContext): void {
         const remaining = await listWorktrees(root);
         await notes.prune(new Set(remaining.map((worktree) => worktree.path)));
         provider.refresh();
-        void vscode.window.showInformationMessage("Pruned stale worktree metadata.");
+        void vscode.window.showInformationMessage(t("Pruned stale worktree metadata."));
       } catch (error) {
         showError(error);
       }
@@ -345,39 +323,18 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       await pushWorktreeCommand(item, provider);
     }),
-    vscode.commands.registerCommand("worktreeExplorer.fetch", async (item?: WorktreeItem) => {
-      if (!item) {
-        return;
-      }
-      const root = await rootForCommand(item);
-      if (!root) {
-        void vscode.window.showErrorMessage("No workspace folder is open.");
-        return;
-      }
-      try {
-        const result = await withCancellableProgress(`Fetching ${String(item.label)}...`, (signal) =>
-          fetchWorktree(root, item.worktree.path, signal)
-        );
-        provider.refresh();
-        await showOutputResult(`Fetched ${String(item.label)}`, result);
-      } catch (error) {
-        if (!isAbortError(error)) {
-          showError(error);
-        }
-      }
-    }),
     vscode.commands.registerCommand("worktreeExplorer.fetchAll", async () => {
       const root = await repositories.current();
       if (!root) {
-        void vscode.window.showErrorMessage("No workspace folder is open.");
+        void vscode.window.showErrorMessage(t("No workspace folder is open."));
         return;
       }
       try {
-        const result = await withCancellableProgress("Fetching all remotes...", (signal) =>
+        const result = await withCancellableProgress(t("Fetching all remotes..."), (signal) =>
           fetchAllRemotes(root, signal)
         );
         provider.refresh();
-        await showOutputResult("Fetched all remotes", result);
+        await showOutputResult(t("Fetched all remotes"), result);
       } catch (error) {
         if (!isAbortError(error)) {
           showError(error);
@@ -394,59 +351,6 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         await mergeBranchCommand(item, provider);
-      }
-    ),
-    vscode.commands.registerCommand("worktreeExplorer.lockWorktree", async (item?: WorktreeItem) => {
-      if (!item) {
-        return;
-      }
-      const root = await rootForCommand(item);
-      if (!root) {
-        void vscode.window.showErrorMessage("No workspace folder is open.");
-        return;
-      }
-      if (item.worktree.locked) {
-        void vscode.window.showInformationMessage(`Worktree ${String(item.label)} is already locked.`);
-        return;
-      }
-      const reason = await vscode.window.showInputBox({
-        title: "Lock Worktree",
-        prompt: `Reason for locking ${String(item.label)} (optional)`,
-        ignoreFocusOut: true,
-      });
-      if (reason === undefined) {
-        return;
-      }
-      try {
-        await lockWorktree(root, item.worktree.path, reason);
-        provider.refresh();
-        void vscode.window.showInformationMessage(`Locked worktree ${String(item.label)}.`);
-      } catch (error) {
-        showError(error);
-      }
-    }),
-    vscode.commands.registerCommand(
-      "worktreeExplorer.unlockWorktree",
-      async (item?: WorktreeItem) => {
-        if (!item) {
-          return;
-        }
-        const root = await rootForCommand(item);
-        if (!root) {
-          void vscode.window.showErrorMessage("No workspace folder is open.");
-          return;
-        }
-        if (!item.worktree.locked) {
-          void vscode.window.showInformationMessage(`Worktree ${String(item.label)} is not locked.`);
-          return;
-        }
-        try {
-          await unlockWorktree(root, item.worktree.path);
-          provider.refresh();
-          void vscode.window.showInformationMessage(`Unlocked worktree ${String(item.label)}.`);
-        } catch (error) {
-          showError(error);
-        }
       }
     ),
     vscode.commands.registerCommand("worktreeExplorer.quickOpen", async () => {
@@ -483,10 +387,15 @@ async function createWorktree(
   provider: WorktreeProvider,
   repositories: RepositoryManager
 ): Promise<void> {
-  const root =
-    item && item.worktree.bare === false ? item.worktree.path : await repositories.current();
+  // A prunable worktree's directory is gone, so it cannot serve as the
+  // repository root or as the source for settings-directory copies.
+  const sourcePath =
+    item && item.worktree.bare === false && item.worktree.prunable === false
+      ? item.worktree.path
+      : await repositories.current();
+  const root = sourcePath;
   if (!root) {
-    void vscode.window.showErrorMessage("No workspace folder is open.");
+    void vscode.window.showErrorMessage(t("No workspace folder is open."));
     return;
   }
 
@@ -518,23 +427,28 @@ async function createWorktree(
       const trackingChoice = await vscode.window.showQuickPick(
         [
           {
-            label: "$(check) Track remote branch (--track)",
+            label: t("$(circle-outline) --no-track (recommended)"),
             description: remoteBranch,
-            detail: "Unchecked (default): --no-track, the new branch has no upstream. Check this to set the upstream.",
-            picked: false,
+            detail: t("The new branch gets no upstream; you can set one later with Pull."),
+            value: false,
+          },
+          {
+            label: t("$(check) --track"),
+            description: remoteBranch,
+            detail: t("Set the remote branch as the new branch's upstream."),
+            value: true,
           },
         ],
         {
-          title: "Upstream Tracking",
-          placeHolder: "Default --no-track; check the item to use --track",
-          canPickMany: true,
+          title: t("Upstream Tracking"),
+          placeHolder: t("Choose whether the new branch tracks the remote branch"),
           ignoreFocusOut: true,
         }
       );
-      if (trackingChoice === undefined) {
+      if (!trackingChoice) {
         return;
       }
-      track = trackingChoice.length > 0;
+      track = trackingChoice.value;
     } else if (mode.mode === "existing") {
       const existing = await pickExistingBranch(root, worktrees);
       if (!existing) {
@@ -544,15 +458,17 @@ async function createWorktree(
       return;
     } else {
       const commitish = await vscode.window.showInputBox({
-        title: "Create Detached Worktree",
-        prompt: "Commit SHA, tag, or any commit-ish",
+        title: t("Create Detached Worktree"),
+        prompt: t("Commit SHA, tag, or any commit-ish"),
         ignoreFocusOut: true,
         validateInput: async (value) => {
           const trimmed = value.trim();
           if (!trimmed) {
-            return "A commit or tag is required.";
+            return t("A commit or tag is required.");
           }
-          return (await isCommitish(root, trimmed)) ? undefined : `"${trimmed}" is not a valid commit or tag.`;
+          return (await isCommitish(root, trimmed))
+            ? undefined
+            : t('"{0}" is not a valid commit or tag.', trimmed);
         },
       });
       if (!commitish) {
@@ -572,23 +488,17 @@ async function createWorktree(
       return;
     }
 
-    const copyDirs = await chooseCopyDirs(
-      item && item.worktree.bare === false ? item.worktree.path : root
-    );
+    const copyDirs = await chooseCopyDirs(sourcePath);
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: `Creating worktree ${branch}...`,
+        title: t("Creating worktree {0}...", branch),
         cancellable: false,
       },
       async () => {
         await addWorktree(root, branch, directory, baseBranch, track);
         if (copyDirs.length > 0) {
-          await copyConfiguredDirs(
-            item && item.worktree.bare === false ? item.worktree.path : root,
-            directory,
-            copyDirs
-          );
+          await copyConfiguredDirs(sourcePath, directory, copyDirs);
         }
       }
     );
@@ -598,6 +508,17 @@ async function createWorktree(
   } catch (error) {
     showError(error);
   }
+}
+
+/**
+ * Settings-directory copy source for a context-menu launch. Prunable or bare
+ * items cannot be a source, so fall back to the repository root.
+ */
+function copySourcePath(sourceItem: WorktreeItem | undefined, root: string): string {
+  if (sourceItem && sourceItem.worktree.bare === false && sourceItem.worktree.prunable === false) {
+    return sourceItem.worktree.path;
+  }
+  return root;
 }
 
 async function createExistingWorktree(
@@ -610,17 +531,18 @@ async function createExistingWorktree(
   if (!directory) {
     return;
   }
-  const copyDirs = await chooseCopyDirs(sourceItem ? sourceItem.worktree.path : root);
+  const source = copySourcePath(sourceItem, root);
+  const copyDirs = await chooseCopyDirs(source);
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: `Checking out worktree ${branch}...`,
+      title: t("Checking out worktree {0}...", branch),
       cancellable: false,
     },
     async () => {
       await addExistingWorktree(root, directory, branch);
       if (copyDirs.length > 0) {
-        await copyConfiguredDirs(sourceItem ? sourceItem.worktree.path : root, directory, copyDirs);
+        await copyConfiguredDirs(source, directory, copyDirs);
       }
     }
   );
@@ -639,17 +561,18 @@ async function createDetachedWorktree(
   if (!directory) {
     return;
   }
-  const copyDirs = await chooseCopyDirs(sourceItem ? sourceItem.worktree.path : root);
+  const source = copySourcePath(sourceItem, root);
+  const copyDirs = await chooseCopyDirs(source);
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: `Creating detached worktree ${folderName}...`,
+      title: t("Creating detached worktree {0}...", folderName),
       cancellable: false,
     },
     async () => {
       await addDetachedWorktree(root, directory, commitish);
       if (copyDirs.length > 0) {
-        await copyConfiguredDirs(sourceItem ? sourceItem.worktree.path : root, directory, copyDirs);
+        await copyConfiguredDirs(source, directory, copyDirs);
       }
     }
   );
@@ -660,31 +583,31 @@ async function createDetachedWorktree(
 async function pickCreateMode(defaultBase: string): Promise<ModeItem | undefined> {
   const modes: ModeItem[] = [
     {
-      label: `$(git-branch) New branch from ${defaultBase || "HEAD"}`,
-      description: "Use the current worktree branch as the base",
+      label: t("$(git-branch) New branch from {0}", defaultBase || "HEAD"),
+      description: t("Use the current worktree branch as the base"),
       mode: "new-current",
     },
     {
-      label: "$(repo) New branch from another local branch",
+      label: t("$(repo) New branch from another local branch"),
       mode: "new-local",
     },
     {
-      label: "$(cloud) New branch from a remote branch",
+      label: t("$(cloud) New branch from a remote branch"),
       mode: "new-remote",
     },
     {
-      label: "$(check) Check out an existing local branch",
+      label: t("$(check) Check out an existing local branch"),
       mode: "existing",
     },
     {
-      label: "$(git-commit) Detached worktree from commit/tag",
+      label: t("$(git-commit) Detached worktree from commit/tag"),
       mode: "detached",
     },
   ];
 
   return vscode.window.showQuickPick(modes, {
-    title: "Create Worktree",
-    placeHolder: "Choose what the new worktree should be based on",
+    title: t("Create Worktree"),
+    placeHolder: t("Choose what the new worktree should be based on"),
     ignoreFocusOut: true,
   });
 }
@@ -693,13 +616,13 @@ async function pickLocalBranch(root: string, current: string | undefined): Promi
   const branches = await listLocalBranches(root);
   const items: BranchItem[] = branches.map((branch) => ({
     label: branch,
-    description: branch === current ? "current" : undefined,
+    description: branch === current ? t("current") : undefined,
     branch,
     remote: false,
   }));
   const selected = await vscode.window.showQuickPick(items, {
-    title: "Base Branch",
-    placeHolder: "Choose a local branch to create the new branch from",
+    title: t("Base Branch"),
+    placeHolder: t("Choose a local branch to create the new branch from"),
     ignoreFocusOut: true,
   });
   return selected?.branch;
@@ -709,9 +632,9 @@ async function pickRemoteBranch(root: string): Promise<string | undefined> {
   while (true) {
     const remoteBranches = await listRemoteBranches(root);
     if (remoteBranches.length === 0) {
-      const fetchNow = "Fetch Remotes";
+      const fetchNow = t("Fetch Remotes");
       const choice = await vscode.window.showWarningMessage(
-        "No remote branches are available.",
+        t("No remote branches are available."),
         { modal: true },
         fetchNow
       );
@@ -721,7 +644,7 @@ async function pickRemoteBranch(root: string): Promise<string | undefined> {
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: "Fetching remotes...",
+          title: t("Fetching remotes..."),
           cancellable: false,
         },
         () => fetchAllRemotes(root)
@@ -731,7 +654,7 @@ async function pickRemoteBranch(root: string): Promise<string | undefined> {
 
     const items: BranchItem[] = [
       {
-        label: "$(sync) Fetch remotes and refresh list",
+        label: t("$(sync) Fetch remotes and refresh list"),
         branch: "",
         remote: true,
       },
@@ -742,8 +665,8 @@ async function pickRemoteBranch(root: string): Promise<string | undefined> {
       })),
     ];
     const selected = await vscode.window.showQuickPick(items, {
-      title: "Remote Branch",
-      placeHolder: "Choose a remote branch to create the new branch from",
+      title: t("Remote Branch"),
+      placeHolder: t("Choose a remote branch to create the new branch from"),
       ignoreFocusOut: true,
     });
     if (!selected) {
@@ -753,7 +676,7 @@ async function pickRemoteBranch(root: string): Promise<string | undefined> {
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: "Fetching remotes...",
+          title: t("Fetching remotes..."),
           cancellable: false,
         },
         () => fetchAllRemotes(root)
@@ -769,21 +692,20 @@ async function pickExistingBranch(
   worktrees: import("./gitWorktreeCore").GitWorktree[]
 ): Promise<string | undefined> {
   const branches = await listLocalBranches(root);
-  const checkedOut = new Set(
-    worktrees
-      .filter((worktree) => worktree.branch && worktree.prunable === false && worktree.bare === false)
-      .map((worktree) => worktree.branch as string)
-  );
+  // Include prunable worktrees: git's registry still considers their branch
+  // checked out and rejects `git worktree add` with "already used by
+  // worktree at ..." until the stale metadata is pruned.
+  const checkedOut = checkedOutBranches(worktrees);
   const available = branches.filter((branch) => !checkedOut.has(branch));
   if (available.length === 0) {
     void vscode.window.showInformationMessage(
-      "Every local branch is already checked out in a worktree."
+      t("Every local branch is already checked out in a worktree.")
     );
     return undefined;
   }
   const selected = await vscode.window.showQuickPick(available, {
-    title: "Check Out Existing Branch",
-    placeHolder: "Choose a local branch that is not checked out anywhere",
+    title: t("Check Out Existing Branch"),
+    placeHolder: t("Choose a local branch that is not checked out anywhere"),
     ignoreFocusOut: true,
   });
   return selected;
@@ -799,8 +721,8 @@ async function promptNewBranchName(
     ? remoteBranchShortName(baseBranch)
     : `${prefix}${path.posix.basename(baseBranch)}-worktree`;
   const branch = await vscode.window.showInputBox({
-    title: "New Branch Name",
-    prompt: `Create a new branch from ${baseBranch}`,
+    title: t("New Branch Name"),
+    prompt: t("Create a new branch from {0}", baseBranch),
     value: suggested,
     placeHolder: "feature/my-branch",
     ignoreFocusOut: true,
@@ -840,8 +762,8 @@ async function promptWorktreeDirectory(
     200
   );
   const directory = await vscode.window.showInputBox({
-    title: "Worktree Directory",
-    prompt: "Absolute directory for the new worktree",
+    title: t("Worktree Directory"),
+    prompt: t("Absolute directory for the new worktree"),
     value: suggested,
     valueSelection: [0, suggested.length],
     ignoreFocusOut: true,
@@ -857,16 +779,16 @@ async function validateWorktreeDirectory(
 ): Promise<string | undefined> {
   const directory = value.trim();
   if (!directory) {
-    return "Working directory is required.";
+    return t("Working directory is required.");
   }
   if (!path.isAbsolute(directory)) {
-    return "Working directory must be an absolute path.";
+    return t("Working directory must be an absolute path.");
   }
 
   const resolved = path.resolve(directory);
   const rootPath = path.resolve(root);
   if (resolved === rootPath) {
-    return "Choose a subdirectory; the repository root itself cannot be a new worktree.";
+    return t("Choose a subdirectory; the repository root itself cannot be a new worktree.");
   }
 
   const separator = path.sep;
@@ -891,27 +813,27 @@ async function validateWorktreeDirectory(
     );
   });
   if (overlapsWorktree) {
-    return "The directory cannot overlap an existing worktree.";
+    return t("The directory cannot overlap an existing worktree.");
   }
 
   const parent = path.dirname(resolved);
   try {
     const parentStat = await fs.promises.stat(parent);
     if (!parentStat.isDirectory()) {
-      return `Parent "${parent}" is not a directory.`;
+      return t('Parent "{0}" is not a directory.', parent);
     }
   } catch {
-    return `Parent directory "${parent}" does not exist.`;
+    return t('Parent directory "{0}" does not exist.', parent);
   }
 
   try {
     const targetStat = await fs.promises.stat(resolved);
     if (!targetStat.isDirectory()) {
-      return `"${resolved}" already exists and is not a directory.`;
+      return t('"{0}" already exists and is not a directory.', resolved);
     }
     const entries = await fs.promises.readdir(resolved);
     if (entries.length > 0) {
-      return `"${resolved}" already exists and is not empty.`;
+      return t('"{0}" already exists and is not empty.', resolved);
     }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
@@ -950,19 +872,19 @@ async function chooseCopyDirs(sourceRoot: string): Promise<string[]> {
   const choice = await vscode.window.showQuickPick(
     [
       {
-        label: `$(copy) Copy settings directories`,
+        label: t("$(copy) Copy settings directories"),
         description: available.join(", "),
-        detail: "Copy them from the source worktree into the new worktree.",
+        detail: t("Copy them from the source worktree into the new worktree."),
         value: true,
       },
       {
-        label: "$(x) Skip copying",
+        label: t("$(x) Skip copying"),
         value: false,
       },
     ],
     {
-      title: "Copy Settings",
-      placeHolder: "Choose whether to copy settings directories",
+      title: t("Copy Settings"),
+      placeHolder: t("Choose whether to copy settings directories"),
       ignoreFocusOut: true,
     }
   );
@@ -988,28 +910,28 @@ async function copyConfiguredDirs(
 
 async function showCreatedActions(branch: string, directory: string): Promise<void> {
   const choice = await vscode.window.showInformationMessage(
-    `Created worktree ${branch} at ${directory}`,
-    "Open in Cursor",
-    "Open in Current Window",
-    "Open in Terminal",
-    "Copy Path"
+    t("Created worktree {0} at {1}", branch, directory),
+    t("Open in Cursor"),
+    t("Open in Current Window"),
+    t("Open in Terminal"),
+    t("Copy Path")
   );
-  if (choice === "Open in Cursor") {
+  if (choice === t("Open in Cursor")) {
     try {
       await openInCursor(directory);
     } catch (error) {
       showError(error);
     }
-  } else if (choice === "Open in Current Window") {
+  } else if (choice === t("Open in Current Window")) {
     try {
       await openInCurrentWindow(directory);
     } catch (error) {
       showError(error);
     }
-  } else if (choice === "Open in Terminal") {
+  } else if (choice === t("Open in Terminal")) {
     const terminal = vscode.window.createTerminal({ cwd: directory, name: branch });
     terminal.show();
-  } else if (choice === "Copy Path") {
+  } else if (choice === t("Copy Path")) {
     await vscode.env.clipboard.writeText(directory);
   }
 }
@@ -1020,11 +942,11 @@ async function showCreatedActions(branch: string, directory: string): Promise<vo
 
 async function pullWorktreeCommand(item: WorktreeItem, provider: WorktreeProvider): Promise<void> {
   if (item.worktree.bare) {
-    void vscode.window.showWarningMessage("Bare worktrees cannot be updated from a remote.");
+    void vscode.window.showWarningMessage(t("Bare worktrees cannot be updated from a remote."));
     return;
   }
   if (!item.worktree.branch) {
-    void vscode.window.showWarningMessage("A detached HEAD worktree cannot be pulled.");
+    void vscode.window.showWarningMessage(t("A detached HEAD worktree cannot be pulled."));
     return;
   }
 
@@ -1038,11 +960,11 @@ async function pullWorktreeCommand(item: WorktreeItem, provider: WorktreeProvide
       }
     }
 
-    const result = await withCancellableProgress(`Pulling ${String(item.label)}...`, (signal) =>
+    const result = await withCancellableProgress(t("Pulling {0}...", labelOf(item)), (signal) =>
       pullWorktree(root, item.worktree.path, signal)
     );
     provider.refresh();
-    await showOutputResult(`Pulled ${String(item.label)}`, result);
+    await showOutputResult(t("Pulled {0}", labelOf(item)), result);
   } catch (error) {
     if (!isAbortError(error)) {
       showError(error);
@@ -1057,7 +979,7 @@ async function offerSetUpstream(
 ): Promise<string | undefined> {
   const remotes = await listRemotes(root);
   if (remotes.length === 0) {
-    void vscode.window.showWarningMessage("No remotes are configured for this repository.");
+    void vscode.window.showWarningMessage(t("No remotes are configured for this repository."));
     return undefined;
   }
 
@@ -1065,8 +987,8 @@ async function offerSetUpstream(
     remotes.length === 1
       ? remotes[0]
       : await vscode.window.showQuickPick(remotes, {
-          title: "Choose Remote",
-          placeHolder: "Choose a remote for the upstream branch",
+          title: t("Choose Remote"),
+          placeHolder: t("Choose a remote for the upstream branch"),
           ignoreFocusOut: true,
         });
   if (!remote) {
@@ -1076,35 +998,35 @@ async function offerSetUpstream(
   const remoteBranch = `${remote}/${branch}`;
   if (!(await isRemoteBranch(root, remoteBranch))) {
     const choice = await vscode.window.showWarningMessage(
-      `Remote branch "${remoteBranch}" does not exist. Fetch remotes and try again?`,
+      t('Remote branch "{0}" does not exist. Fetch remotes and try again?', remoteBranch),
       { modal: true },
-      "Fetch"
+      t("Fetch")
     );
-    if (choice !== "Fetch") {
+    if (choice !== t("Fetch")) {
       return undefined;
     }
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: "Fetching remotes...",
+        title: t("Fetching remotes..."),
         cancellable: false,
       },
       () => fetchAllRemotes(root)
     );
     if (!(await isRemoteBranch(root, remoteBranch))) {
       void vscode.window.showErrorMessage(
-        `Remote branch "${remoteBranch}" still does not exist after fetching.`
+        t('Remote branch "{0}" still does not exist after fetching.', remoteBranch)
       );
       return undefined;
     }
   }
 
   const confirm = await vscode.window.showWarningMessage(
-    `Set "${remoteBranch}" as upstream of "${branch}" and pull?`,
+    t('Set "{0}" as upstream of "{1}" and pull?', remoteBranch, branch),
     { modal: true },
-    "Set Upstream and Pull"
+    t("Set Upstream and Pull")
   );
-  if (confirm !== "Set Upstream and Pull") {
+  if (confirm !== t("Set Upstream and Pull")) {
     return undefined;
   }
 
@@ -1114,11 +1036,11 @@ async function offerSetUpstream(
 
 async function pushWorktreeCommand(item: WorktreeItem, provider: WorktreeProvider): Promise<void> {
   if (item.worktree.bare) {
-    void vscode.window.showWarningMessage("Bare worktrees cannot be pushed to a remote.");
+    void vscode.window.showWarningMessage(t("Bare worktrees cannot be pushed to a remote."));
     return;
   }
   if (!item.worktree.branch) {
-    void vscode.window.showWarningMessage("A detached HEAD worktree cannot be pushed.");
+    void vscode.window.showWarningMessage(t("A detached HEAD worktree cannot be pushed."));
     return;
   }
 
@@ -1132,7 +1054,7 @@ async function pushWorktreeCommand(item: WorktreeItem, provider: WorktreeProvide
     if (hasUpstream === false) {
       const remotes = await listRemotes(root);
       if (remotes.length === 0) {
-        void vscode.window.showWarningMessage("No remotes are configured for this repository.");
+        void vscode.window.showWarningMessage(t("No remotes are configured for this repository."));
         return;
       }
 
@@ -1140,8 +1062,8 @@ async function pushWorktreeCommand(item: WorktreeItem, provider: WorktreeProvide
         remotes.length === 1
           ? remotes[0]
           : await vscode.window.showQuickPick(remotes, {
-              title: "Push to Remote",
-              placeHolder: "Choose a remote to push to",
+              title: t("Push to Remote"),
+              placeHolder: t("Choose a remote to push to"),
               ignoreFocusOut: true,
             });
       if (!remote) {
@@ -1149,26 +1071,26 @@ async function pushWorktreeCommand(item: WorktreeItem, provider: WorktreeProvide
       }
 
       const choice = await vscode.window.showWarningMessage(
-        `Push branch "${branch}" to "${remote}" and set it as upstream?`,
+        t('Push branch "{0}" to "{1}" and set it as upstream?', branch, remote),
         { modal: true },
-        "Push"
+        t("Push")
       );
-      if (choice !== "Push") {
+      if (choice !== t("Push")) {
         return;
       }
 
       pushTask = (signal) => pushNewBranch(root, item.worktree.path, remote, branch, signal);
-      successFallback = `Pushed ${branch} to ${remote}.`;
+      successFallback = t("Pushed {0} to {1}.", branch, remote);
     } else {
       pushTask = (signal) => pushWorktree(root, item.worktree.path, signal);
-      successFallback = `Pushed ${String(item.label)} to remote.`;
+      successFallback = t("Pushed {0} to remote.", labelOf(item));
     }
 
-    const result = await withCancellableProgress(`Pushing ${String(item.label)}...`, (signal) =>
+    const result = await withCancellableProgress(t("Pushing {0}...", labelOf(item)), (signal) =>
       pushTask(signal)
     );
     provider.refresh();
-    await showOutputResult(`Pushed ${String(item.label)}`, result || successFallback);
+    await showOutputResult(t("Pushed {0}", labelOf(item)), result || successFallback);
   } catch (error) {
     if (!isAbortError(error)) {
       showError(error);
@@ -1178,11 +1100,11 @@ async function pushWorktreeCommand(item: WorktreeItem, provider: WorktreeProvide
 
 async function mergeBranchCommand(item: WorktreeItem, provider: WorktreeProvider): Promise<void> {
   if (item.worktree.bare) {
-    void vscode.window.showWarningMessage("Bare worktrees cannot merge branches.");
+    void vscode.window.showWarningMessage(t("Bare worktrees cannot merge branches."));
     return;
   }
   if (!item.worktree.branch) {
-    void vscode.window.showWarningMessage("A detached HEAD worktree cannot merge branches.");
+    void vscode.window.showWarningMessage(t("A detached HEAD worktree cannot merge branches."));
     return;
   }
 
@@ -1191,13 +1113,13 @@ async function mergeBranchCommand(item: WorktreeItem, provider: WorktreeProvider
     const branches = await listLocalBranches(root);
     const otherBranches = branches.filter((branch) => branch !== item.worktree.branch);
     if (otherBranches.length === 0) {
-      void vscode.window.showInformationMessage("No other branches to merge.");
+      void vscode.window.showInformationMessage(t("No other branches to merge."));
       return;
     }
 
     const sourceBranch = await vscode.window.showQuickPick(otherBranches, {
-      title: "Merge Branch",
-      placeHolder: `Choose a branch to merge into ${item.worktree.branch}`,
+      title: t("Merge Branch"),
+      placeHolder: t("Choose a branch to merge into {0}", item.worktree.branch),
       ignoreFocusOut: true,
     });
     if (!sourceBranch) {
@@ -1205,20 +1127,20 @@ async function mergeBranchCommand(item: WorktreeItem, provider: WorktreeProvider
     }
 
     const choice = await vscode.window.showWarningMessage(
-      `Merge branch "${sourceBranch}" into "${item.worktree.branch}"?`,
+      t('Merge branch "{0}" into "{1}"?', sourceBranch, item.worktree.branch),
       { modal: true },
-      "Merge"
+      t("Merge")
     );
-    if (choice !== "Merge") {
+    if (choice !== t("Merge")) {
       return;
     }
 
     const result = await withCancellableProgress(
-      `Merging ${sourceBranch} into ${item.worktree.branch}...`,
+      t("Merging {0} into {1}...", sourceBranch, item.worktree.branch),
       (signal) => mergeBranch(root, item.worktree.path, sourceBranch, signal)
     );
     provider.refresh();
-    await showOutputResult(`Merged ${sourceBranch} into ${item.worktree.branch}`, result);
+    await showOutputResult(t("Merged {0} into {1}", sourceBranch, item.worktree.branch), result);
   } catch (error) {
     if (!isAbortError(error)) {
       showError(error);
@@ -1238,17 +1160,19 @@ async function deleteWorktreeCommand(
 ): Promise<void> {
   if (item.current) {
     void vscode.window.showErrorMessage(
-      "This worktree is currently open in this window. Open another worktree window first, then delete this one from there."
+      t(
+        "This worktree is currently open in this window. Open another worktree window first, then delete this one from there."
+      )
     );
     return;
   }
   if (item.worktree.main) {
-    void vscode.window.showErrorMessage("The main worktree cannot be removed.");
+    void vscode.window.showErrorMessage(t("The main worktree cannot be removed."));
     return;
   }
   if (item.worktree.prunable) {
     void vscode.window.showWarningMessage(
-      "This worktree is already prunable. Run Prune Worktrees to remove its metadata."
+      t("This worktree is already prunable. Run Prune Worktrees to remove its metadata.")
     );
     return;
   }
@@ -1259,11 +1183,19 @@ async function deleteWorktreeCommand(
   const worktrees = await listWorktrees(root);
 
   if (branch) {
-    const activeWorktrees = worktrees.filter((worktree) => worktree.prunable === false);
+    // Prunable worktrees still hold their branch in git's registry, so
+    // `git branch -D` would refuse to delete it until the metadata is pruned.
+    const activeWorktrees = worktrees.filter((worktree) => worktree.bare === false);
     const other = findBranchWorktree(activeWorktrees, branch, item.worktree.path);
     if (other) {
       void vscode.window.showErrorMessage(
-        `Branch "${branch}" is also checked out at "${other.path}". Delete or switch that worktree first.`
+        other.prunable
+          ? t(
+              'Branch "{0}" is still checked out in prunable worktree "{1}". Run Prune Worktrees first.',
+              branch,
+              other.path
+            )
+          : t('Branch "{0}" is also checked out at "{1}". Delete or switch that worktree first.', branch, other.path)
       );
       return;
     }
@@ -1271,13 +1203,15 @@ async function deleteWorktreeCommand(
 
   if (item.worktree.locked) {
     const unlockChoice = await vscode.window.showWarningMessage(
-      `Worktree "${String(item.label)}" is locked${
+      t(
+        'Worktree "{0}" is locked{1}. Unlock it and continue?',
+        labelOf(item),
         item.worktree.lockReason ? `: ${item.worktree.lockReason}` : ""
-      }. Unlock it and continue?`,
+      ),
       { modal: true },
-      "Unlock and Delete"
+      t("Unlock and Delete")
     );
-    if (unlockChoice !== "Unlock and Delete") {
+    if (unlockChoice !== t("Unlock and Delete")) {
       return;
     }
     await unlockWorktree(root, item.worktree.path);
@@ -1285,24 +1219,35 @@ async function deleteWorktreeCommand(
 
   const dirtyNotice =
     changedFiles > 0
-      ? `\n\nIt has ${changedFiles} changed file${changedFiles === 1 ? "" : "s"} that will be removed with the worktree.`
+      ? `\n\n${t(
+          "It has {0} changed file{1} that will be removed with the worktree.",
+          String(changedFiles),
+          changedFiles === 1 ? "" : "s"
+        )}`
       : "";
   const firstChoice = await vscode.window.showWarningMessage(
-    `Delete worktree "${String(item.label)}"?${dirtyNotice}`,
+    t('Delete worktree "{0}"?{1}', labelOf(item), dirtyNotice),
     { modal: true },
-    branch ? "Delete Worktree and Branch" : "Remove Worktree"
+    branch ? t("Delete Worktree and Branch") : t("Remove Worktree")
   );
   if (firstChoice === undefined) {
     return;
   }
 
-  const deleteBranchToo = firstChoice === "Delete Worktree and Branch";
+  const deleteBranchToo = firstChoice === t("Delete Worktree and Branch");
   const secondChoice = await vscode.window.showWarningMessage(
     deleteBranchToo
-      ? `This will permanently delete branch "${branch}" and remove the worktree directory "${item.worktree.path}". This cannot be undone.`
-      : `This will remove the worktree directory "${item.worktree.path}". The branch will be kept. This cannot be undone.`,
+      ? t(
+          'This will permanently delete branch "{0}" and remove the worktree directory "{1}". This cannot be undone.',
+          String(branch),
+          item.worktree.path
+        )
+      : t(
+          'This will remove the worktree directory "{0}". The branch will be kept. This cannot be undone.',
+          item.worktree.path
+        ),
     { modal: true },
-    deleteBranchToo ? "Delete Branch and Worktree" : "Remove Worktree"
+    deleteBranchToo ? t("Delete Branch and Worktree") : t("Remove Worktree")
   );
   if (secondChoice === undefined) {
     return;
@@ -1315,7 +1260,7 @@ async function deleteWorktreeCommand(
     }
     await notes.delete(item.worktree.path);
     provider.refresh();
-    void vscode.window.showInformationMessage(`Deleted worktree ${String(item.label)}.`);
+    void vscode.window.showInformationMessage(t("Deleted worktree {0}.", labelOf(item)));
   } catch (error) {
     showError(error);
   }
@@ -1327,7 +1272,7 @@ async function pullAllCommand(
 ): Promise<void> {
   const root = await repositories.current();
   if (!root) {
-    void vscode.window.showErrorMessage("No workspace folder is open.");
+    void vscode.window.showErrorMessage(t("No workspace folder is open."));
     return;
   }
 
@@ -1337,7 +1282,7 @@ async function pullAllCommand(
       (worktree) => !worktree.bare && worktree.branch && !worktree.prunable
     );
     if (candidates.length === 0) {
-      void vscode.window.showInformationMessage("No pullable worktrees.");
+      void vscode.window.showInformationMessage(t("No pullable worktrees."));
       return;
     }
 
@@ -1346,7 +1291,7 @@ async function pullAllCommand(
     const pullable = candidates.filter((worktree) => statuses.get(worktree.path)?.hasUpstream);
     if (pullable.length === 0) {
       void vscode.window.showInformationMessage(
-        "No worktree branch has an upstream configured."
+        t("No worktree branch has an upstream configured.")
       );
       return;
     }
@@ -1357,8 +1302,8 @@ async function pullAllCommand(
       worktree,
     }));
     const selected = await vscode.window.showQuickPick(items, {
-      title: "Pull Worktrees",
-      placeHolder: "Choose worktrees to pull",
+      title: t("Pull Worktrees"),
+      placeHolder: t("Choose worktrees to pull"),
       canPickMany: true,
       ignoreFocusOut: true,
     });
@@ -1368,33 +1313,52 @@ async function pullAllCommand(
 
     const successes: string[] = [];
     const failures: string[] = [];
-    for (let index = 0; index < selected.length; index += 1) {
-      const entry = selected[index];
-      try {
-        const result = await withCancellableProgress(
-          `Pulling ${entry.label} (${index + 1}/${selected.length})...`,
-          (signal) => pullWorktree(root, entry.worktree.path, signal)
-        );
-        successes.push(`${entry.label}: ${result || "up to date"}`);
-      } catch (error) {
-        if (isAbortError(error)) {
-          provider.refresh();
-          return;
+    // One progress notification for the whole batch; the message tracks the
+    // current worktree instead of flashing a new notification per pull.
+    const cancelled = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: t("Pulling selected worktrees..."),
+        cancellable: true,
+      },
+      async (progress, token) => {
+        const controller = new AbortController();
+        const disposable = token.onCancellationRequested(() => controller.abort());
+        try {
+          for (let index = 0; index < selected.length; index += 1) {
+            const entry = selected[index];
+            progress.report({ message: `${entry.label} (${index + 1}/${selected.length})` });
+            try {
+              const result = await pullWorktree(root, entry.worktree.path, controller.signal);
+              successes.push(`${entry.label}: ${result || t("up to date")}`);
+            } catch (error) {
+              if (isAbortError(error)) {
+                return true;
+              }
+              failures.push(`${entry.label}: ${errorMessage(error)}`);
+            }
+          }
+          return false;
+        } finally {
+          disposable.dispose();
         }
-        failures.push(`${entry.label}: ${errorMessage(error)}`);
       }
+    );
+    if (cancelled) {
+      provider.refresh();
+      return;
     }
 
     provider.refresh();
     const summary = [
-      successes.length > 0 ? `Pulled ${successes.length} worktree(s):` : "",
+      successes.length > 0 ? t("Pulled {0} worktree(s):", String(successes.length)) : "",
       ...successes,
-      failures.length > 0 ? `Failed ${failures.length} worktree(s):` : "",
+      failures.length > 0 ? t("Failed {0} worktree(s):", String(failures.length)) : "",
       ...failures,
     ]
       .filter((line) => line.length > 0)
       .join("\n");
-    await showOutputResult("Pull All", summary);
+    await showOutputResult(t("Pull All"), summary);
   } catch (error) {
     showError(error);
   }
@@ -1406,7 +1370,7 @@ async function quickOpenWorktree(
 ): Promise<void> {
   const root = await repositories.current();
   if (!root) {
-    void vscode.window.showErrorMessage("No workspace folder is open.");
+    void vscode.window.showErrorMessage(t("No workspace folder is open."));
     return;
   }
 
@@ -1415,14 +1379,14 @@ async function quickOpenWorktree(
     (worktree) => worktree.bare === false && worktree.prunable === false
   );
   const items = openable.map((worktree) => ({
-    label: worktree.branch ?? "(detached)",
+    label: worktree.branch ?? t("(detached)"),
     description: worktree.path,
     detail: notes.get(worktree.path),
     worktree,
   }));
   const selected = await vscode.window.showQuickPick(items, {
-    title: "Go to Worktree",
-    placeHolder: "Search by branch, path, or note",
+    title: t("Go to Worktree"),
+    placeHolder: t("Search by branch, path, or note"),
     matchOnDescription: true,
     matchOnDetail: true,
     ignoreFocusOut: true,
@@ -1433,15 +1397,15 @@ async function quickOpenWorktree(
 
   const action = await vscode.window.showQuickPick(
     [
-      { label: "$(window) Open in Cursor", action: "cursor" },
-      { label: "$(globe) Open in Current Window", action: "current" },
-      { label: "$(terminal) Open in Terminal", action: "terminal" },
-      { label: "$(copy) Copy Path", action: "copy" },
-      { label: "$(folder-opened) Reveal in File Explorer", action: "reveal" },
+      { label: `$(window) ${t("Open in Cursor")}`, action: "cursor" },
+      { label: `$(globe) ${t("Open in Current Window")}`, action: "current" },
+      { label: `$(terminal) ${t("Open in Terminal")}`, action: "terminal" },
+      { label: `$(copy) ${t("Copy Path")}`, action: "copy" },
+      { label: `$(folder-opened) ${t("Reveal in File Explorer")}`, action: "reveal" },
     ],
     {
-      title: `Actions for ${selected.label}`,
-      placeHolder: "Choose an action",
+      title: t("Actions for {0}", selected.label),
+      placeHolder: t("Choose an action"),
       ignoreFocusOut: true,
     }
   );

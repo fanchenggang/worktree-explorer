@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   branchFolderName,
   buildAddWorktreeArgs,
+  checkedOutBranches,
   formatAge,
   hasUpstreamNameMismatch,
   isCurrentWorktree,
@@ -238,4 +239,28 @@ test("branchFolderName and shortSha normalize values", () => {
   assert.equal(branchFolderName("feature/trailing."), "feature-trailing");
   assert.equal(branchFolderName("feature/trailing "), "feature-trailing");
   assert.equal(shortSha("abcdef1234567"), "abcdef1");
+});
+
+test("checkedOutBranches includes prunable worktrees but excludes bare ones", () => {
+  const worktrees = parsePorcelain(
+    [
+      "worktree /repo",
+      "HEAD aaaaaaa",
+      "branch refs/heads/main",
+      "",
+      "worktree /repo/prunable",
+      "HEAD bbbbbbb",
+      "branch refs/heads/gone",
+      "prunable gitdir file points to non-existent location",
+      "",
+      "worktree /repo/bare",
+      "HEAD ccccccc",
+      "bare",
+      "",
+    ].join("\n")
+  );
+
+  // The prunable worktree's branch must count as checked out: git's registry
+  // still rejects `git worktree add` for it with "already used by worktree".
+  assert.deepEqual([...checkedOutBranches(worktrees)].sort(), ["gone", "main"]);
 });

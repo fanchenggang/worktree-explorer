@@ -5,6 +5,7 @@ src/**
 tsconfig.json
 **/*.map
 **/*.test.js
+out/e2e/**
 node_modules/**
 **/*.ts
 eslint.config.mjs

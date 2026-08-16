@@ -35,19 +35,25 @@ Cursor / VS Code 侧边栏插件：列出当前仓库的全部 git worktree，�
   - Prune Worktrees（带 dry-run 确认，并清理失效备注）
 - 快速跳转：`Go to Worktree...` 支持按分支名、路径、备注模糊搜索
 
-## 已废弃功能
+## 已移除功能
 
-以下命令已废弃：命令面板调用无法携带具体 worktree 参数，实际不会生效，不再提供支持（相关实现仍保留在 `src/extension.ts`，后续版本清理）：
+以下命令已移除：命令面板调用无法携带具体 worktree 参数，实际不会生效：
 
 - `Open in VS Code`
-- `Open in Current Window`（命令面板入口；创建完成后的「Open in Current Window」操作不受影响，仍可用）
-- `Lock Worktree` / `Unlock Worktree`（树中仍显示 lock 状态）
+- `Open in Current Window`（创建完成后的「Open in Current Window」操作不受影响，仍可用；`Go to Worktree...` 中也有该操作）
+- `Lock Worktree` / `Unlock Worktree`（树中仍显示 lock 状态；删除流程会在必要时自动处理解锁）
 - `Clear Note`（清空备注即可达到同样效果）
 - `Fetch Remote`（单个 worktree；可用视图标题栏的 Fetch All Remotes 代替）
 
 ## 环境要求
 
 - Git ≥ 2.25（创建 worktree 使用 `--track` / `--no-track` 参数）
+- 若 `git` 不在 PATH 中，请在 VS Code / Cursor 的 `git.path` 设置中指定 git 可执行文件路径（扩展会读取该设置）
+
+## 已知限制
+
+- 备注保存在 VS Code 的全局状态（`worktreeExplorer.notes`）中；多个窗口同时编辑同一 worktree 的备注时，后保存者覆盖先保存者（last-write-wins）。
+- 树项中的相对时间（如 `2m ago`）为纯函数格式化，暂未本地化。
 
 ## 本地调试
 
@@ -55,6 +61,14 @@ Cursor / VS Code 侧边栏插件：列出当前仓库的全部 git worktree，�
 2. `npm install`
 3. F5 启动 Extension Development Host
 4. 在新窗口左侧 Activity Bar 打开 **Worktrees**
+
+运行检查与测试：
+
+```bash
+npm run lint      # 类型检查（含 type-aware ESLint）
+npm test          # 单元测试 + 真实 git 集成测试
+npm run test:e2e  # VS Code 扩展宿主冒烟测试（首次运行会下载 VS Code）
+```
 
 ## 安装 VSIX
 

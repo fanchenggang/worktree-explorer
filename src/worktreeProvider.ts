@@ -8,7 +8,6 @@ import {
   listWorktrees,
   repositoryRoots,
   shortSha,
-  workspaceRoot,
   workspaceRoots,
 } from "./gitWorktree";
 import { NotesStore } from "./notesStore";
@@ -20,7 +19,7 @@ class MessageItem extends vscode.TreeItem {
     if (retry) {
       this.command = {
         command: "worktreeExplorer.refresh",
-        title: "Retry",
+        title: vscode.l10n.t("Retry"),
       };
     }
   }
@@ -34,7 +33,7 @@ export class WorktreeItem extends vscode.TreeItem {
     private readonly showPath: boolean
   ) {
     const label = worktree.bare
-      ? "(bare)"
+      ? vscode.l10n.t("(bare)")
       : (worktree.branch ?? (worktree.head ? shortSha(worktree.head) : worktree.path));
     super(label, vscode.TreeItemCollapsibleState.None);
 
@@ -83,7 +82,7 @@ export class WorktreeItem extends vscode.TreeItem {
   private buildDescription(): string | undefined {
     const badges: string[] = [];
     if (this.current) {
-      badges.push("current");
+      badges.push(vscode.l10n.t("current"));
     }
     if (this.showPath) {
       badges.push(
@@ -93,25 +92,38 @@ export class WorktreeItem extends vscode.TreeItem {
       );
     }
     if (this.worktree.locked) {
-      badges.push(this.worktree.lockReason ? `locked: ${this.worktree.lockReason}` : "locked");
+      badges.push(
+        this.worktree.lockReason
+          ? vscode.l10n.t("locked: {0}", this.worktree.lockReason)
+          : vscode.l10n.t("locked")
+      );
     }
     if (this.worktree.prunable) {
-      badges.push("prunable");
+      badges.push(vscode.l10n.t("prunable"));
     }
 
     const status = this.worktree.status;
     if (status) {
+      if (status.unavailable) {
+        badges.push(vscode.l10n.t("status unavailable"));
+      }
       if (status.changedFiles > 0) {
-        badges.push(`${status.changedFiles} change${status.changedFiles === 1 ? "" : "s"}`);
+        badges.push(
+          vscode.l10n.t(
+            "{0} change{1}",
+            String(status.changedFiles),
+            status.changedFiles === 1 ? "" : "s"
+          )
+        );
       }
       if (status.hasUpstream && ((status.ahead ?? 0) > 0 || (status.behind ?? 0) > 0)) {
-        badges.push(`↑${status.ahead ?? 0} ↓${status.behind ?? 0}`);
+        badges.push(vscode.l10n.t("↑{0} ↓{1}", String(status.ahead ?? 0), String(status.behind ?? 0)));
       }
       if (status.upstreamBranch && this.hasUpstreamNameMismatch()) {
-        badges.push(`⚠ upstream ${status.upstreamBranch}`);
+        badges.push(vscode.l10n.t("⚠ upstream {0}", status.upstreamBranch));
       }
       if (status.upstreamGone) {
-        badges.push("⚠ upstream gone");
+        badges.push(vscode.l10n.t("⚠ upstream gone"));
       }
       if (status.lastCommitIso) {
         badges.push(formatAge(status.lastCommitIso));
@@ -131,51 +143,69 @@ export class WorktreeItem extends vscode.TreeItem {
   private buildTooltip(): string {
     const lines = [this.worktree.path];
     if (this.worktree.main) {
-      lines.push("main worktree");
+      lines.push(vscode.l10n.t("main worktree"));
     }
     if (this.worktree.bare) {
-      lines.push("bare repository");
+      lines.push(vscode.l10n.t("bare repository"));
     } else if (this.worktree.branch) {
-      lines.push(`branch: ${this.worktree.branch}`);
+      lines.push(vscode.l10n.t("branch: {0}", this.worktree.branch));
     } else {
-      lines.push(`detached HEAD: ${this.worktree.head}`);
+      lines.push(vscode.l10n.t("detached HEAD: {0}", this.worktree.head));
     }
 
     if (this.worktree.locked) {
-      lines.push(`locked${this.worktree.lockReason ? `: ${this.worktree.lockReason}` : ""}`);
+      lines.push(
+        this.worktree.lockReason
+          ? vscode.l10n.t("locked: {0}", this.worktree.lockReason)
+          : vscode.l10n.t("locked")
+      );
     }
     if (this.worktree.prunable) {
-      lines.push("prunable: metadata points to a missing directory");
+      lines.push(vscode.l10n.t("prunable: metadata points to a missing directory"));
     }
 
     const status = this.worktree.status;
     if (status) {
-      lines.push(`changes: ${status.changedFiles}`);
-      if (status.hasUpstream) {
-        lines.push(`ahead ${status.ahead ?? 0} · behind ${status.behind ?? 0}`);
-        if (status.upstreamBranch) {
-          lines.push(`upstream: ${status.upstreamBranch}`);
-        }
+      if (status.unavailable) {
+        lines.push(vscode.l10n.t("status unavailable: could not read git status for this worktree"));
       } else {
-        lines.push("no upstream");
+        lines.push(vscode.l10n.t("changes: {0}", String(status.changedFiles)));
+        if (status.hasUpstream) {
+          lines.push(
+            vscode.l10n.t(
+              "ahead {0} · behind {1}",
+              String(status.ahead ?? 0),
+              String(status.behind ?? 0)
+            )
+          );
+          if (status.upstreamBranch) {
+            lines.push(vscode.l10n.t("upstream: {0}", status.upstreamBranch));
+          }
+        } else {
+          lines.push(vscode.l10n.t("no upstream"));
+        }
       }
 
       if (status.upstreamBranch && this.hasUpstreamNameMismatch()) {
-        lines.push(`warning: tracked remote branch name differs: ${status.upstreamBranch}`);
+        lines.push(
+          vscode.l10n.t("warning: tracked remote branch name differs: {0}", status.upstreamBranch)
+        );
       }
       if (status.upstreamGone) {
-        lines.push("warning: tracked remote branch was deleted");
+        lines.push(vscode.l10n.t("warning: tracked remote branch was deleted"));
       }
       if (status.lastCommitIso) {
-        lines.push(`last commit: ${new Date(status.lastCommitIso).toLocaleString()}`);
+        lines.push(
+          vscode.l10n.t("last commit: {0}", new Date(status.lastCommitIso).toLocaleString())
+        );
       }
     }
 
     if (this.note) {
-      lines.push(`note: ${this.note}`);
+      lines.push(vscode.l10n.t("note: {0}", this.note));
     }
     if (this.current) {
-      lines.push("current");
+      lines.push(vscode.l10n.t("current"));
     }
     return lines.join("\n");
   }
@@ -214,7 +244,9 @@ export class WorktreeProvider implements vscode.TreeDataProvider<vscode.TreeItem
   async getChildren(): Promise<vscode.TreeItem[]> {
     const root = await this.options.getRepositoryRoot();
     if (root === undefined) {
-      return [new MessageItem("Open a Git repository workspace to see worktrees.")];
+      return [
+        new MessageItem(vscode.l10n.t("Open a Git repository workspace to see worktrees.")),
+      ];
     }
 
     try {
@@ -296,13 +328,18 @@ export class WorktreeProvider implements vscode.TreeDataProvider<vscode.TreeItem
 
 class RepositoryItem extends vscode.TreeItem {
   constructor(repositoryRoot: string) {
-    super(`Repository: ${repositoryRoot}`, vscode.TreeItemCollapsibleState.None);
+    super(
+      vscode.l10n.t("Repository: {0}", repositoryRoot),
+      vscode.TreeItemCollapsibleState.None
+    );
     this.iconPath = new vscode.ThemeIcon("folder-opened");
-    this.tooltip = "The selected repository. Click to choose another workspace repository.";
-    this.description = "select repository";
+    this.tooltip = vscode.l10n.t(
+      "The selected repository. Click to choose another workspace repository."
+    );
+    this.description = vscode.l10n.t("select repository");
     this.command = {
       command: "worktreeExplorer.selectRepository",
-      title: "Select Repository",
+      title: vscode.l10n.t("Select Repository"),
     };
   }
 }
@@ -332,8 +369,4 @@ export function sortWorktrees(worktrees: GitWorktree[], currentPaths: string[]):
     const rightName = right.branch ?? right.path;
     return leftName.localeCompare(rightName);
   });
-}
-
-export function fallbackRepositoryRoot(): string | undefined {
-  return workspaceRoot();
 }

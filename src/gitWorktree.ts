@@ -14,6 +14,7 @@ export {
   GitWorktree,
   WorktreeStatus,
   branchFolderName,
+  checkedOutBranches,
   isCurrentWorktree,
   isCurrentWorktreeIn,
   parsePorcelain,
@@ -22,6 +23,15 @@ export {
 } from "./gitWorktreeCore";
 
 const execFileAsync = promisify(execFile);
+
+/**
+ * Resolves the git binary. Honors VS Code's built-in `git.path` setting so
+ * installations where git is not on PATH (common on Windows) still work.
+ */
+function gitCommand(): string {
+  const configured = vscode.workspace.getConfiguration("git").get<string | null>("path", null);
+  return configured && configured.trim().length > 0 ? configured.trim() : "git";
+}
 
 export interface GitRunOptions {
   timeoutMs?: number;
@@ -34,7 +44,7 @@ export async function runGit(
   options: GitRunOptions = {}
 ): Promise<string> {
   try {
-    const { stdout } = await execFileAsync("git", args, {
+    const { stdout } = await execFileAsync(gitCommand(), args, {
       cwd,
       encoding: "utf8",
       timeout: options.timeoutMs,
@@ -81,6 +91,10 @@ export function workspaceRoots(): string[] {
 let cachedRepositoryRoots: { roots: string[]; expires: number } | undefined;
 const REPOSITORY_ROOTS_CACHE_MS = 30_000;
 
+export function invalidateRepositoryRootsCache(): void {
+  cachedRepositoryRoots = undefined;
+}
+
 export async function repositoryRoots(): Promise<string[]> {
   const now = Date.now();
   const cached = cachedRepositoryRoots;
@@ -113,6 +127,13 @@ async function computeRepositoryRoots(): Promise<string[]> {
       const topLevel = await tryRunGit(root, ["rev-parse", "--show-toplevel"]);
       if (topLevel !== undefined) {
         unique.set(path.resolve(topLevel), topLevel);
+        return;
+      }
+
+      // Bare repositories have no top-level checkout; detect them explicitly.
+      const bare = await tryRunGit(root, ["rev-parse", "--is-bare-repository"]);
+      if (bare === "true") {
+        unique.set(path.resolve(root), root);
       }
     })
   );
@@ -169,18 +190,18 @@ export async function validateBranchName(
   branch: string
 ): Promise<string | undefined> {
   if (branch.length === 0) {
-    return "Branch name is required.";
+    return vscode.l10n.t("Branch name is required.");
   }
 
   try {
     await runGit(cwd, ["check-ref-format", "--branch", branch]);
   } catch {
-    return `"${branch}" is not a valid git branch name.`;
+    return vscode.l10n.t('"{0}" is not a valid git branch name.', branch);
   }
 
   try {
     await runGit(cwd, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]);
-    return `Branch "${branch}" already exists.`;
+    return vscode.l10n.t('Branch "{0}" already exists.', branch);
   } catch {
     return undefined;
   }
@@ -230,19 +251,6 @@ export async function removeWorktree(
   const args = ["worktree", "remove"];
   if (force) {
     args.push("--force");
-  }
-  args.push(worktreePath);
-  await runGit(cwd, args);
-}
-
-export async function lockWorktree(
-  cwd: string,
-  worktreePath: string,
-  reason?: string
-): Promise<void> {
-  const args = ["worktree", "lock"];
-  if (reason && reason.trim()) {
-    args.push("--reason", reason.trim());
   }
   args.push(worktreePath);
   await runGit(cwd, args);
@@ -399,6 +407,9 @@ export async function getWorktreeStatuses(
         statuses.set(worktree.path, await getWorktreeStatus(cwd, worktree.path));
       } catch (error) {
         console.warn(`Failed to read status for ${worktree.path}: ${String(error)}`);
+        // Record an explicit marker so the UI can show "status unavailable"
+        // instead of silently presenting the worktree as clean.
+        statuses.set(worktree.path, { changedFiles: 0, hasUpstream: false, unavailable: true });
       }
     }
   }

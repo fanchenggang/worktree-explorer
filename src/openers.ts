@@ -8,18 +8,25 @@ import * as vscode from "vscode";
 const execFileAsync = promisify(execFile);
 
 const OPEN_A_SENTINEL = "__open_a__";
+const EXTERNAL_COMMAND_TIMEOUT_MS = 15_000;
 
 function runExternal(command: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
   const needsShell = process.platform === "win32" && /\.(cmd|bat)$/i.test(command);
   if (needsShell) {
-    // With `shell: true` Node passes the arguments to cmd.exe verbatim, so a
-    // path containing spaces or `&` would break or be interpreted. Quote each
-    // argument ourselves: Windows paths cannot contain double quotes, so this
-    // is safe for the values this module passes.
+    // With `shell: true` Node passes the joined string to cmd.exe verbatim, so
+    // a path containing spaces or `&` would break or be interpreted. Quote the
+    // command and each argument ourselves: Windows paths cannot contain double
+    // quotes, so this is safe for the values this module passes.
+    const quotedCommand = command.startsWith('"') && command.endsWith('"') ? command : `"${command}"`;
     const quotedArgs = args.map((arg) => `"${arg}"`);
-    return execFileAsync(command, quotedArgs, { shell: true });
+    return execFileAsync(quotedCommand, quotedArgs, {
+      shell: true,
+      timeout: EXTERNAL_COMMAND_TIMEOUT_MS,
+    });
   }
-  return execFileAsync(command, args);
+  // A timeout keeps a hanging launcher (e.g. an IDEA CLI waiting on a lock)
+  // from blocking the command forever.
+  return execFileAsync(command, args, { timeout: EXTERNAL_COMMAND_TIMEOUT_MS });
 }
 
 function config(): vscode.WorkspaceConfiguration {
@@ -41,7 +48,10 @@ export async function openInCursor(worktreePath: string): Promise<void> {
     await runExternal(command, [worktreePath]);
   } catch {
     throw new Error(
-      `Failed to open Cursor (${command}). Install the Cursor shell command, or set worktreeExplorer.cursorCommand.`
+      vscode.l10n.t(
+        "Failed to open Cursor ({0}). Install the Cursor shell command, or set worktreeExplorer.cursorCommand.",
+        command
+      )
     );
   }
 }
@@ -57,7 +67,10 @@ export async function openInCode(worktreePath: string): Promise<void> {
     await runExternal(command, [worktreePath]);
   } catch {
     throw new Error(
-      `Failed to open VS Code (${command}). Install the VS Code shell command, or set worktreeExplorer.vscodeCommand.`
+      vscode.l10n.t(
+        "Failed to open VS Code ({0}). Install the VS Code shell command, or set worktreeExplorer.vscodeCommand.",
+        command
+      )
     );
   }
 }
@@ -82,7 +95,9 @@ export async function openInIdea(worktreePath: string): Promise<void> {
   }
 
   throw new Error(
-    "Failed to open IntelliJ IDEA. In IDEA, run Tools → Create Command-line Launcher, or set worktreeExplorer.ideaCommand to the absolute path."
+    vscode.l10n.t(
+      "Failed to open IntelliJ IDEA. In IDEA, run Tools → Create Command-line Launcher, or set worktreeExplorer.ideaCommand to the absolute path."
+    )
   );
 }
 

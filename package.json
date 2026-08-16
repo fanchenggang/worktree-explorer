@@ -2,26 +2,31 @@
   "name": "git-worktree-explorer",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "fanchenggang",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/fanchenggang/worktree-explorer.git"
   },
+  "bugs": {
+    "url": "https://github.com/fanchenggang/worktree-explorer/issues"
+  },
+  "icon": "media/icon.png",
+  "keywords": [
+    "git",
+    "worktree",
+    "worktrees",
+    "branch",
+    "cursor",
+    "intellij"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Other"
-  ],
-  "activationEvents": [
-    "onView:worktreeExplorer.list",
-    "onCommand:worktreeExplorer.quickOpen",
-    "onCommand:worktreeExplorer.createWorktree",
-    "onCommand:worktreeExplorer.selectRepository",
-    "onCommand:worktreeExplorer.fetchAll",
-    "onCommand:worktreeExplorer.pullAll"
+    "Other",
+    "SCM Providers"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -152,19 +157,9 @@
         "icon": "$(window)"
       },
       {
-        "command": "worktreeExplorer.openCode",
-        "title": "%commands.worktreeExplorer.openCode.title%",
-        "icon": "$(code)"
-      },
-      {
         "command": "worktreeExplorer.openIdea",
         "title": "%commands.worktreeExplorer.openIdea.title%",
         "icon": "$(file-code)"
-      },
-      {
-        "command": "worktreeExplorer.openCurrentWindow",
-        "title": "%commands.worktreeExplorer.openCurrentWindow.title%",
-        "icon": "$(globe)"
       },
       {
         "command": "worktreeExplorer.revealInOS",
@@ -175,11 +170,6 @@
         "command": "worktreeExplorer.editNote",
         "title": "%commands.worktreeExplorer.editNote.title%",
         "icon": "$(pencil)"
-      },
-      {
-        "command": "worktreeExplorer.clearNote",
-        "title": "%commands.worktreeExplorer.clearNote.title%",
-        "icon": "$(close)"
       },
       {
         "command": "worktreeExplorer.openTerminal",
@@ -212,11 +202,6 @@
         "icon": "$(cloud-upload)"
       },
       {
-        "command": "worktreeExplorer.fetch",
-        "title": "%commands.worktreeExplorer.fetch.title%",
-        "icon": "$(sync)"
-      },
-      {
         "command": "worktreeExplorer.fetchAll",
         "title": "%commands.worktreeExplorer.fetchAll.title%",
         "icon": "$(sync~spin)"
@@ -230,16 +215,6 @@
         "command": "worktreeExplorer.mergeBranch",
         "title": "%commands.worktreeExplorer.mergeBranch.title%",
         "icon": "$(git-merge)"
-      },
-      {
-        "command": "worktreeExplorer.lockWorktree",
-        "title": "%commands.worktreeExplorer.lockWorktree.title%",
-        "icon": "$(lock)"
-      },
-      {
-        "command": "worktreeExplorer.unlockWorktree",
-        "title": "%commands.worktreeExplorer.unlockWorktree.title%",
-        "icon": "$(unlock)"
       },
       {
         "command": "worktreeExplorer.deleteWorktree",
@@ -293,17 +268,17 @@
         },
         {
           "command": "worktreeExplorer.pull",
-          "when": "view == worktreeExplorer.list && viewItem =~ /worktree/ && viewItem =~ /checkout/ && viewItem =~ /branch/",
+          "when": "view == worktreeExplorer.list && viewItem =~ /worktree/ && viewItem =~ /checkout/ && viewItem =~ /branch/ && viewItem =~ /attached/",
           "group": "navigation@2"
         },
         {
           "command": "worktreeExplorer.push",
-          "when": "view == worktreeExplorer.list && viewItem =~ /worktree/ && viewItem =~ /checkout/ && viewItem =~ /branch/",
+          "when": "view == worktreeExplorer.list && viewItem =~ /worktree/ && viewItem =~ /checkout/ && viewItem =~ /branch/ && viewItem =~ /attached/",
           "group": "navigation@3"
         },
         {
           "command": "worktreeExplorer.mergeBranch",
-          "when": "view == worktreeExplorer.list && viewItem =~ /worktree/ && viewItem =~ /checkout/ && viewItem =~ /branch/",
+          "when": "view == worktreeExplorer.list && viewItem =~ /worktree/ && viewItem =~ /checkout/ && viewItem =~ /branch/ && viewItem =~ /attached/",
           "group": "navigation@1"
         },
         {
@@ -333,7 +308,8 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "test": "npm run compile && node --test out/*.test.js",
+    "test": "npm run compile && node --test \"out/*.test.js\"",
+    "test:e2e": "npm run compile && node out/e2e/runTest.js",
     "lint": "tsc -p ./ --noEmit && eslint src",
     "package": "npx --yes @vscode/vsce@3.9.2 package"
   },
@@ -341,6 +317,7 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^20.17.0",
     "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.5.2",
     "eslint": "^10.8.1",
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.67.0"

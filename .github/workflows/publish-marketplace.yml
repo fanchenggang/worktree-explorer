@@ -27,6 +27,9 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: E2E Test
+        run: xvfb-run -a npm run test:e2e
+
       - name: Publish VSIX
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}

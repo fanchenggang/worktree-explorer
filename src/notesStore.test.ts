@@ -11,9 +11,10 @@ class FakeMemento implements MementoLike {
     return value === undefined ? defaultValue : (value as unknown as T);
   }
 
-  async update(key: string, value: unknown): Promise<void> {
+  update(key: string, value: unknown): Promise<void> {
     this.updates += 1;
-    this.value[key] = value as Record<string, string>;
+    this.value[key] = value;
+    return Promise.resolve();
   }
 }
 

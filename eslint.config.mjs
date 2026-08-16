@@ -6,12 +6,13 @@ export default tseslint.config(
     ignores: ["out/**", "node_modules/**", "*.vsix"],
   },
   eslint.configs.recommended,
-  ...tseslint.configs.recommended,
+  ...tseslint.configs.recommendedTypeChecked,
   {
     files: ["src/**/*.ts"],
     languageOptions: {
       parserOptions: {
-        projectService: false,
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
       },
     },
     rules: {
@@ -21,6 +22,14 @@ export default tseslint.config(
       ],
       "no-case-declarations": "off",
       "no-empty": ["error", { allowEmptyCatch: true }],
+    },
+  },
+  {
+    // The node:test runner awaits the top-level `test()` promises itself;
+    // top-level await-less calls are the idiom for its declaration blocks.
+    files: ["src/**/*.test.ts"],
+    rules: {
+      "@typescript-eslint/no-floating-promises": "off",
     },
   }
 );

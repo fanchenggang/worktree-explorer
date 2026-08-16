@@ -22,6 +22,8 @@ export interface WorktreeStatus {
   upstreamBranch?: string;
   upstreamGone?: boolean;
   lastCommitIso?: string;
+  /** True when the status read failed; all other fields are defaults. */
+  unavailable?: boolean;
 }
 
 export function parsePorcelain(output: string): GitWorktree[] {
@@ -175,6 +177,21 @@ export function hasUpstreamNameMismatch(
   upstreamBranch: string
 ): boolean {
   return localBranch !== upstreamBranchShortName(upstreamBranch);
+}
+
+/**
+ * Branches still checked out somewhere according to git's worktree registry.
+ *
+ * Prunable worktrees count: their directory is gone but the registry still
+ * marks the branch as in use, and `git worktree add <path> <branch>` fails
+ * with "already used by worktree at ..." until the metadata is pruned.
+ */
+export function checkedOutBranches(worktrees: GitWorktree[]): Set<string> {
+  return new Set(
+    worktrees
+      .filter((worktree) => worktree.branch && worktree.bare === false)
+      .map((worktree) => worktree.branch as string)
+  );
 }
 
 /**
