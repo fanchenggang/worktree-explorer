@@ -294,17 +294,17 @@
         {
           "command": "worktreeExplorer.pull",
           "when": "view == worktreeExplorer.list && viewItem =~ /worktree/ && viewItem =~ /checkout/ && viewItem =~ /branch/",
-          "group": "navigation@1"
+          "group": "navigation@2"
         },
         {
           "command": "worktreeExplorer.push",
           "when": "view == worktreeExplorer.list && viewItem =~ /worktree/ && viewItem =~ /checkout/ && viewItem =~ /branch/",
-          "group": "navigation@2"
+          "group": "navigation@3"
         },
         {
           "command": "worktreeExplorer.mergeBranch",
           "when": "view == worktreeExplorer.list && viewItem =~ /worktree/ && viewItem =~ /checkout/ && viewItem =~ /branch/",
-          "group": "navigation@3"
+          "group": "navigation@1"
         },
         {
           "command": "worktreeExplorer.revealInOS",

@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Slim and reorder the worktree context menu: Create Worktree Branch → Pull/Push/Merge → Reveal/Open in Terminal/Copy Path → Delete Worktree.
+- Slim and reorder the worktree context menu: Create Worktree Branch → Merge/Pull/Push → Reveal/Open in Terminal/Copy Path → Delete Worktree.
 - Automatic focus/interval refreshes now reuse the status cache instead of clearing it; default `statusCacheSeconds` is 30.
 
 ### Fixed

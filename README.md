@@ -22,7 +22,7 @@ Cursor / VS Code 侧边栏插件：列出当前仓库的全部 git worktree，�
 - 右键操作（精简菜单，按显示顺序）
   - 行内按钮：Open in Cursor / Open in IDEA / Edit Note
   - Create Worktree Branch
-  - Pull / Push / Merge
+  - Merge / Pull / Push
     - Pull 无 upstream 时可选择设置 upstream 后拉取
     - 输出写入 `Worktree Explorer` OutputChannel，可一键复制
   - Reveal in File Explorer / Open in Terminal / Copy Path
