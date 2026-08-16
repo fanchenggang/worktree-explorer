@@ -287,44 +287,39 @@
           "group": "inline"
         },
         {
-          "command": "worktreeExplorer.revealInOS",
+          "command": "worktreeExplorer.createWorktree",
           "when": "view == worktreeExplorer.list && viewItem =~ /worktree/",
-          "group": "navigation@1"
-        },
-        {
-          "command": "worktreeExplorer.openTerminal",
-          "when": "view == worktreeExplorer.list && viewItem =~ /worktree/",
-          "group": "navigation@2"
-        },
-        {
-          "command": "worktreeExplorer.copyPath",
-          "when": "view == worktreeExplorer.list && viewItem =~ /worktree/",
-          "group": "navigation@3"
+          "group": "navigation@0"
         },
         {
           "command": "worktreeExplorer.pull",
           "when": "view == worktreeExplorer.list && viewItem =~ /worktree/ && viewItem =~ /checkout/ && viewItem =~ /branch/",
-          "group": "navigation@4"
+          "group": "navigation@1"
         },
         {
           "command": "worktreeExplorer.push",
           "when": "view == worktreeExplorer.list && viewItem =~ /worktree/ && viewItem =~ /checkout/ && viewItem =~ /branch/",
-          "group": "navigation@5"
-        },
-        {
-          "command": "worktreeExplorer.fetch",
-          "when": "view == worktreeExplorer.list && viewItem =~ /worktree/ && viewItem =~ /checkout/",
-          "group": "navigation@6"
+          "group": "navigation@2"
         },
         {
           "command": "worktreeExplorer.mergeBranch",
           "when": "view == worktreeExplorer.list && viewItem =~ /worktree/ && viewItem =~ /checkout/ && viewItem =~ /branch/",
-          "group": "navigation@7"
+          "group": "navigation@3"
         },
         {
-          "command": "worktreeExplorer.createWorktree",
+          "command": "worktreeExplorer.revealInOS",
           "when": "view == worktreeExplorer.list && viewItem =~ /worktree/",
-          "group": "1_create"
+          "group": "navigation@4"
+        },
+        {
+          "command": "worktreeExplorer.openTerminal",
+          "when": "view == worktreeExplorer.list && viewItem =~ /worktree/",
+          "group": "navigation@5"
+        },
+        {
+          "command": "worktreeExplorer.copyPath",
+          "when": "view == worktreeExplorer.list && viewItem =~ /worktree/",
+          "group": "navigation@6"
         },
         {
           "command": "worktreeExplorer.deleteWorktree",

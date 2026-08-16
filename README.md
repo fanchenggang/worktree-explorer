@@ -19,17 +19,17 @@ Cursor / VS Code 侧边栏插件：列出当前仓库的全部 git worktree，�
   - 新 worktree 目录默认 `<仓库根>/<分支名>`，并校验父目录和冲突路径
   - 可选择复制 `.cursor` / `.vscode` 等设置目录（默认复制 `.cursor`，可配置）
   - 创建完成后可直接在 Cursor / 当前窗口 / 终端打开
-- 右键操作（精简菜单）
-  - Open in Cursor / IDEA / Terminal
-  - Reveal in File Explorer、Copy Path
-  - Pull、Push、Fetch、Merge
+- 右键操作（精简菜单，按显示顺序）
+  - 行内按钮：Open in Cursor / Open in IDEA / Edit Note
+  - Create Worktree Branch
+  - Pull / Push / Merge
     - Pull 无 upstream 时可选择设置 upstream 后拉取
     - 输出写入 `Worktree Explorer` OutputChannel，可一键复制
-  - 编辑备注（只存本机，不进 Git）
-  - Delete worktree
+  - Reveal in File Explorer / Open in Terminal / Copy Path
+  - Delete Worktree
     - 当前窗口打开的 worktree、主 worktree 禁止删除
     - 有未提交改动、已锁定、分支在其他 worktree 检出时都有前置检查
-  - 为减少右键菜单噪音，`Open in VS Code`、`Open in Current Window`、`Lock Worktree`、`Unlock Worktree`、`Clear Note` 仅保留在命令面板
+  - 为减少右键菜单噪音，`Fetch Remote`、`Open in VS Code`、`Open in Current Window`、`Lock Worktree`、`Unlock Worktree`、`Clear Note` 仅保留在命令面板
 - 批量操作
   - Fetch All Remotes
   - Pull Selected Worktrees（多选，汇总成功/失败）

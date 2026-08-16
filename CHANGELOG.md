@@ -6,7 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Slim the worktree context menu by removing `Open in VS Code`, `Open in Current Window`, `Lock Worktree`, `Unlock Worktree`, and `Clear Note`; these commands remain available from the command palette.
+- Slim and reorder the worktree context menu: Create Worktree Branch → Pull/Push/Merge → Reveal/Open in Terminal/Copy Path → Delete Worktree.
+- Remove `Fetch Remote` from the context menu; it remains available from the command palette, as do the previously removed commands.
 
 ## [0.4.0] - 2026-08-16
 
