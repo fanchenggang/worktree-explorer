@@ -36,6 +36,18 @@ npm run package
 
 在 Cursor 里：Extensions → `...` → Install from VSIX。
 
+## 发布到 VS Code Marketplace
+
+1. 准备一个拥有 VS Code Marketplace 发布权限的 Personal Access Token。
+2. 在 GitHub 仓库的 **Settings → Secrets and variables → Actions** 中添加 `VSCE_PAT`。
+3. 在 **Actions → Publish to VS Code Marketplace → Run workflow** 手动触发，或推送 `v*` 标签。
+
+也可以在本地发布：
+
+```bash
+VSCE_PAT=<your-token> npx --yes @vscode/vsce@3.9.2 publish
+```
+
 ## 设置
 
 - `worktreeExplorer.ideaCommand`：打开 IDEA 的命令，默认 `idea`
