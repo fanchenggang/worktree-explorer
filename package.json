@@ -2,7 +2,7 @@
   "name": "git-worktree-explorer",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "publisher": "fanchenggang",
   "license": "MIT",
   "repository": {
