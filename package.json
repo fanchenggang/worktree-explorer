@@ -1,6 +1,6 @@
 {
-  "name": "worktree-explorer",
-  "displayName": "Worktree Explorer",
+  "name": "git-worktree-explorer",
+  "displayName": "Worktree Explorer for Cursor & IDEA",
   "description": "List git worktrees, add notes, and open them in Cursor or IntelliJ IDEA",
   "version": "0.2.0",
   "publisher": "fanchenggang",
