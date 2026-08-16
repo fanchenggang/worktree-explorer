@@ -129,10 +129,9 @@ export function activate(context: vscode.ExtensionContext): void {
       const firstChoice = await vscode.window.showWarningMessage(
         `Delete worktree "${String(item.label)}"?${currentNotice}`,
         { modal: true },
-        branch ? "Delete Worktree and Branch" : "Remove Worktree",
-        "Cancel"
+        branch ? "Delete Worktree and Branch" : "Remove Worktree"
       );
-      if (firstChoice === undefined || firstChoice === "Cancel") {
+      if (firstChoice === undefined) {
         return;
       }
 
@@ -142,10 +141,9 @@ export function activate(context: vscode.ExtensionContext): void {
           ? `This will permanently delete branch "${branch}" and remove the worktree directory "${item.worktree.path}". This cannot be undone.`
           : `This will remove the worktree directory "${item.worktree.path}". The branch will be kept. This cannot be undone.`,
         { modal: true },
-        deleteBranchToo ? "Delete Branch and Worktree" : "Remove Worktree",
-        "Cancel"
+        deleteBranchToo ? "Delete Branch and Worktree" : "Remove Worktree"
       );
-      if (secondChoice === undefined || secondChoice === "Cancel") {
+      if (secondChoice === undefined) {
         return;
       }
 

@@ -79,7 +79,7 @@
       },
       {
         "command": "worktreeExplorer.createWorktree",
-        "title": "Create Worktree Branch from Current Branch",
+        "title": "Create Worktree Branch",
         "icon": "$(git-branch)"
       },
       {
