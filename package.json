@@ -3,7 +3,7 @@
   "displayName": "Worktree Explorer",
   "description": "List git worktrees, add notes, and open them in Cursor or IntelliJ IDEA",
   "version": "0.2.0",
-  "publisher": "maiya",
+  "publisher": "fanchenggang",
   "license": "MIT",
   "repository": {
     "type": "git",
