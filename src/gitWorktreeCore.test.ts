@@ -3,9 +3,11 @@ import test from "node:test";
 import {
   branchFolderName,
   formatAge,
+  hasUpstreamNameMismatch,
   parsePorcelain,
   parseWorktreeStatus,
   shortSha,
+  upstreamBranchShortName,
 } from "./gitWorktreeCore";
 
 test("parsePorcelain parses branch, detached, and bare worktrees", () => {
@@ -71,6 +73,7 @@ test("parseWorktreeStatus parses changes and ahead/behind", () => {
       ahead: 1,
       behind: 2,
       hasUpstream: true,
+      upstreamBranch: "origin/main",
     }
   );
 });
@@ -90,8 +93,22 @@ test("parseWorktreeStatus handles no upstream and behind-only branches", () => {
       ahead: undefined,
       behind: 3,
       hasUpstream: true,
+      upstreamBranch: "origin/main",
     }
   );
+});
+
+test("upstreamBranchShortName strips remote-tracking prefixes", () => {
+  assert.equal(upstreamBranchShortName("origin/main"), "main");
+  assert.equal(upstreamBranchShortName("origin/feature/x"), "feature/x");
+  assert.equal(upstreamBranchShortName("refs/remotes/origin/main"), "main");
+});
+
+test("hasUpstreamNameMismatch detects different local and remote branch names", () => {
+  assert.equal(hasUpstreamNameMismatch("main", "origin/main"), false);
+  assert.equal(hasUpstreamNameMismatch("feature/x", "origin/feature/x"), false);
+  assert.equal(hasUpstreamNameMismatch("feature/x", "origin/main"), true);
+  assert.equal(hasUpstreamNameMismatch("main", "refs/remotes/origin/main"), false);
 });
 
 test("formatAge formats recent and older commits", () => {

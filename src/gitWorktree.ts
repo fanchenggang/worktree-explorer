@@ -93,6 +93,47 @@ export async function removeWorktree(cwd: string, worktreePath: string): Promise
   await runGit(cwd, ["worktree", "remove", "--force", worktreePath]);
 }
 
+export async function pullWorktree(cwd: string, worktreePath: string): Promise<string> {
+  return runGit(cwd, ["-C", worktreePath, "pull", "--no-edit"]);
+}
+
+export async function pushWorktree(cwd: string, worktreePath: string): Promise<string> {
+  return runGit(cwd, ["-C", worktreePath, "push"]);
+}
+
+export async function pushNewBranch(
+  cwd: string,
+  worktreePath: string,
+  remote: string,
+  branch: string
+): Promise<string> {
+  return runGit(cwd, ["-C", worktreePath, "push", "-u", remote, branch]);
+}
+
+export async function listRemotes(cwd: string): Promise<string[]> {
+  const output = await runGit(cwd, ["remote"]);
+  return output
+    .split(/\r?\n/)
+    .map((remote) => remote.trim())
+    .filter(Boolean);
+}
+
+export async function listBranches(cwd: string): Promise<string[]> {
+  const output = await runGit(cwd, ["branch", "--format=%(refname:short)"]);
+  return output
+    .split(/\r?\n/)
+    .map((branch) => branch.trim())
+    .filter(Boolean);
+}
+
+export async function mergeBranch(
+  cwd: string,
+  worktreePath: string,
+  branch: string
+): Promise<string> {
+  return runGit(cwd, ["-C", worktreePath, "merge", "--no-edit", branch]);
+}
+
 export async function deleteBranch(cwd: string, branch: string): Promise<void> {
   await runGit(cwd, ["branch", "-D", branch]);
 }

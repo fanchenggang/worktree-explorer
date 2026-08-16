@@ -7,12 +7,16 @@ Cursor / VS Code 侧边栏插件：列出当前仓库的全部 git worktree，�
 - 侧边栏列出当前工作区所属仓库的全部 worktree
 - 当前打开的 worktree 标为 `current`
 - 每个 worktree 显示未提交变更数、领先/落后远程状态和最后提交时间
+- 当本地分支和其跟踪的远程分支不同名时，显示 `⚠ upstream <remote-branch>` 警告
 - 每条可写备注（只存在本机，不进 Git）
 - 右键 worktree 分支可从当前分支创建新的 worktree 分支
   - 新分支名默认 `feature/`，可修改
   - 新 worktree 目录默认在当前工作目录下生成，可修改
   - 创建时显式使用 `--no-track`，新分支不会设置 upstream
   - 创建完成后会把当前分支的 `.cursor` 目录覆盖到新 worktree 的 `.cursor`
+- 右键 worktree 分支可拉取远端更新到本地（`git pull --no-edit`）
+- 右键 worktree 分支可推送本地改动到远程分支（有 upstream 直接 `git push`，没有则选择 remote 并执行 `git push -u`）
+- 右键 worktree 分支可将其他本地分支合并到当前分支（`git merge --no-edit`）
 - 右键 worktree 分支可删除该 worktree，带二次确认
   - 可选择仅移除 worktree，或同时强制删除对应分支
 - 右键可执行 `Prune Worktrees`、在终端打开、复制路径

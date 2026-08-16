@@ -10,8 +10,14 @@ import {
   currentBranch,
   deleteBranch,
   dryRunPrune,
+  listBranches,
+  listRemotes,
   listWorktrees,
+  mergeBranch,
   pruneWorktrees,
+  pullWorktree,
+  pushNewBranch,
+  pushWorktree,
   removeWorktree,
   validateBranchName,
   workspaceRoot,
@@ -161,6 +167,184 @@ export function activate(context: vscode.ExtensionContext): void {
         provider.refresh();
         vscode.window.showInformationMessage(
           `Created worktree branch ${normalizedBranch} at ${worktreeDirectory}`
+        );
+      } catch (error) {
+        vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
+      }
+    }),
+    vscode.commands.registerCommand("worktreeExplorer.pull", async (item?: WorktreeItem) => {
+      if (!item) {
+        return;
+      }
+
+      if (item.worktree.bare) {
+        vscode.window.showWarningMessage("Bare worktrees cannot be updated from a remote.");
+        return;
+      }
+
+      if (item.worktree.status && !item.worktree.status.hasUpstream) {
+        vscode.window.showWarningMessage(
+          `Branch "${String(item.label)}" has no upstream branch. Set an upstream branch first.`
+        );
+        return;
+      }
+
+      const root = workspaceRoot();
+      if (!root) {
+        vscode.window.showErrorMessage("No workspace folder is open.");
+        return;
+      }
+
+      try {
+        const output = await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: `Pulling ${String(item.label)}...`,
+            cancellable: false,
+          },
+          () => pullWorktree(root, item.worktree.path)
+        );
+        provider.refresh();
+        vscode.window.showInformationMessage(
+          output || `Updated ${String(item.label)} from remote.`
+        );
+      } catch (error) {
+        vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
+      }
+    }),
+    vscode.commands.registerCommand("worktreeExplorer.push", async (item?: WorktreeItem) => {
+      if (!item) {
+        return;
+      }
+
+      if (item.worktree.bare) {
+        vscode.window.showWarningMessage("Bare worktrees cannot be pushed to a remote.");
+        return;
+      }
+
+      if (!item.worktree.branch) {
+        vscode.window.showWarningMessage("A detached HEAD worktree cannot be pushed.");
+        return;
+      }
+
+      const root = workspaceRoot();
+      if (!root) {
+        vscode.window.showErrorMessage("No workspace folder is open.");
+        return;
+      }
+
+      try {
+        const branch = item.worktree.branch;
+        const hasUpstream = item.worktree.status?.hasUpstream;
+        let pushTask: () => Promise<string>;
+        let successFallback: string;
+
+        if (hasUpstream === false) {
+          const remotes = await listRemotes(root);
+          if (remotes.length === 0) {
+            vscode.window.showWarningMessage("No remotes are configured for this repository.");
+            return;
+          }
+
+          const remote = remotes.length === 1
+            ? remotes[0]
+            : await vscode.window.showQuickPick(remotes, {
+                title: "Push to Remote",
+                placeHolder: "Choose a remote to push to",
+                ignoreFocusOut: true,
+              });
+          if (!remote) {
+            return;
+          }
+
+          const choice = await vscode.window.showWarningMessage(
+            `Push branch "${branch}" to "${remote}" and set it as upstream?`,
+            { modal: true },
+            "Push"
+          );
+          if (choice !== "Push") {
+            return;
+          }
+
+          pushTask = () => pushNewBranch(root, item.worktree.path, remote, branch);
+          successFallback = `Pushed ${branch} to ${remote}.`;
+        } else {
+          pushTask = () => pushWorktree(root, item.worktree.path);
+          successFallback = `Pushed ${String(item.label)} to remote.`;
+        }
+
+        const output = await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: `Pushing ${String(item.label)}...`,
+            cancellable: false,
+          },
+          pushTask
+        );
+        provider.refresh();
+        vscode.window.showInformationMessage(output || successFallback);
+      } catch (error) {
+        vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
+      }
+    }),
+    vscode.commands.registerCommand("worktreeExplorer.mergeBranch", async (item?: WorktreeItem) => {
+      if (!item) {
+        return;
+      }
+
+      if (item.worktree.bare) {
+        vscode.window.showWarningMessage("Bare worktrees cannot merge branches.");
+        return;
+      }
+
+      if (!item.worktree.branch) {
+        vscode.window.showWarningMessage("A detached HEAD worktree cannot merge branches.");
+        return;
+      }
+
+      const root = workspaceRoot();
+      if (!root) {
+        vscode.window.showErrorMessage("No workspace folder is open.");
+        return;
+      }
+
+      try {
+        const branches = await listBranches(root);
+        const otherBranches = branches.filter((branch) => branch !== item.worktree.branch);
+        if (otherBranches.length === 0) {
+          vscode.window.showInformationMessage("No other branches to merge.");
+          return;
+        }
+
+        const sourceBranch = await vscode.window.showQuickPick(otherBranches, {
+          title: "Merge Branch",
+          placeHolder: `Choose a branch to merge into ${item.worktree.branch}`,
+          ignoreFocusOut: true,
+        });
+        if (!sourceBranch) {
+          return;
+        }
+
+        const choice = await vscode.window.showWarningMessage(
+          `Merge branch "${sourceBranch}" into "${item.worktree.branch}"?`,
+          { modal: true },
+          "Merge"
+        );
+        if (choice !== "Merge") {
+          return;
+        }
+
+        const output = await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: `Merging ${sourceBranch} into ${item.worktree.branch}...`,
+            cancellable: false,
+          },
+          () => mergeBranch(root, item.worktree.path, sourceBranch)
+        );
+        provider.refresh();
+        vscode.window.showInformationMessage(
+          output || `Merged ${sourceBranch} into ${item.worktree.branch}.`
         );
       } catch (error) {
         vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));

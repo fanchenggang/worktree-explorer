@@ -12,6 +12,7 @@ export interface WorktreeStatus {
   ahead?: number;
   behind?: number;
   hasUpstream: boolean;
+  upstreamBranch?: string;
   lastCommitIso?: string;
 }
 
@@ -81,13 +82,49 @@ export function parseWorktreeStatus(
 
   const ahead = branchLine?.match(/ahead\s+(\d+)/)?.[1];
   const behind = branchLine?.match(/behind\s+(\d+)/)?.[1];
+  const branchInfo = parseBranchLine(branchLine);
 
   return {
     changedFiles,
     ahead: ahead ? Number(ahead) : undefined,
     behind: behind ? Number(behind) : undefined,
-    hasUpstream: branchLine?.includes("...") ?? false,
+    hasUpstream: branchInfo.hasUpstream,
+    ...(branchInfo.upstreamBranch ? { upstreamBranch: branchInfo.upstreamBranch } : {}),
   };
+}
+
+function parseBranchLine(
+  branchLine: string | undefined
+): { hasUpstream: boolean; upstreamBranch?: string } {
+  if (!branchLine) {
+    return { hasUpstream: false };
+  }
+
+  const normalized = branchLine.replace(/^##\s*/, "");
+  const separator = normalized.indexOf("...");
+  if (separator < 0) {
+    return { hasUpstream: false };
+  }
+
+  const upstreamBranch = normalized.slice(separator + 3).split(/\s+/, 1)[0];
+  if (!upstreamBranch) {
+    return { hasUpstream: false };
+  }
+
+  return { hasUpstream: true, upstreamBranch };
+}
+
+export function upstreamBranchShortName(upstream: string): string {
+  const withoutRefs = upstream.replace(/^refs\/remotes\//, "");
+  const separator = withoutRefs.indexOf("/");
+  return separator >= 0 ? withoutRefs.slice(separator + 1) : withoutRefs;
+}
+
+export function hasUpstreamNameMismatch(
+  localBranch: string,
+  upstreamBranch: string
+): boolean {
+  return localBranch !== upstreamBranchShortName(upstreamBranch);
 }
 
 export function formatAge(iso: string, now: Date = new Date()): string {

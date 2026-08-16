@@ -12,7 +12,9 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Other"],
+  "categories": [
+    "Other"
+  ],
   "activationEvents": [
     "onView:worktreeExplorer.list"
   ],
@@ -98,6 +100,21 @@
         "icon": "$(git-branch)"
       },
       {
+        "command": "worktreeExplorer.pull",
+        "title": "Pull Remote to Local",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "worktreeExplorer.push",
+        "title": "Push Local Changes to Remote",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "worktreeExplorer.mergeBranch",
+        "title": "Merge Branch into Current Branch",
+        "icon": "$(git-merge)"
+      },
+      {
         "command": "worktreeExplorer.deleteWorktree",
         "title": "Delete Worktree",
         "icon": "$(trash)"
@@ -105,18 +122,18 @@
     ],
     "menus": {
       "view/title": [
-      {
-        "command": "worktreeExplorer.refresh",
-        "when": "view == worktreeExplorer.list",
-        "group": "navigation"
-      },
-      {
-        "command": "worktreeExplorer.prune",
-        "when": "view == worktreeExplorer.list",
-        "group": "navigation"
-      }
-    ],
-    "view/item/context": [
+        {
+          "command": "worktreeExplorer.refresh",
+          "when": "view == worktreeExplorer.list",
+          "group": "navigation"
+        },
+        {
+          "command": "worktreeExplorer.prune",
+          "when": "view == worktreeExplorer.list",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
         {
           "command": "worktreeExplorer.openCursor",
           "when": "view == worktreeExplorer.list && viewItem == worktree",
@@ -127,24 +144,39 @@
           "when": "view == worktreeExplorer.list && viewItem == worktree",
           "group": "inline"
         },
-      {
-        "command": "worktreeExplorer.editNote",
-        "when": "view == worktreeExplorer.list && viewItem == worktree",
-        "group": "inline"
-      },
-      {
-        "command": "worktreeExplorer.openTerminal",
-        "when": "view == worktreeExplorer.list && viewItem == worktree",
-        "group": "navigation@1"
-      },
-      {
-        "command": "worktreeExplorer.copyPath",
-        "when": "view == worktreeExplorer.list && viewItem == worktree",
-        "group": "navigation@2"
-      },
-      {
-        "command": "worktreeExplorer.createWorktree",
-        "when": "view == worktreeExplorer.list && viewItem == worktree",
+        {
+          "command": "worktreeExplorer.editNote",
+          "when": "view == worktreeExplorer.list && viewItem == worktree",
+          "group": "inline"
+        },
+        {
+          "command": "worktreeExplorer.openTerminal",
+          "when": "view == worktreeExplorer.list && viewItem == worktree",
+          "group": "navigation@1"
+        },
+        {
+          "command": "worktreeExplorer.copyPath",
+          "when": "view == worktreeExplorer.list && viewItem == worktree",
+          "group": "navigation@2"
+        },
+        {
+          "command": "worktreeExplorer.pull",
+          "when": "view == worktreeExplorer.list && viewItem == worktree",
+          "group": "navigation@3"
+        },
+        {
+          "command": "worktreeExplorer.push",
+          "when": "view == worktreeExplorer.list && viewItem == worktree",
+          "group": "navigation@4"
+        },
+        {
+          "command": "worktreeExplorer.mergeBranch",
+          "when": "view == worktreeExplorer.list && viewItem == worktree",
+          "group": "navigation@5"
+        },
+        {
+          "command": "worktreeExplorer.createWorktree",
+          "when": "view == worktreeExplorer.list && viewItem == worktree",
           "group": "1_create"
         },
         {

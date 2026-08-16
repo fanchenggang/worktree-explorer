@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Pull remote updates into a worktree from its context menu (`worktreeExplorer.pull`).
+- Push local changes to the remote branch from the context menu (`worktreeExplorer.push`), with remote selection when the branch has no upstream.
+- Merge another local branch into the selected worktree branch (`worktreeExplorer.mergeBranch`).
+- Show a warning when a local branch tracks a remote branch with a different name.
+
 ## [0.3.0] - 2026-08-16
 
 ### Added

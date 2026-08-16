@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { formatAge } from "./gitWorktreeCore";
+import { formatAge, hasUpstreamNameMismatch } from "./gitWorktreeCore";
 import {
   GitWorktree,
   getWorktreeStatuses,
@@ -40,6 +40,15 @@ export class WorktreeItem extends vscode.TreeItem {
     return (this.worktree.status?.changedFiles ?? 0) > 0;
   }
 
+  private hasUpstreamNameMismatch(): boolean {
+    const branch = this.worktree.branch;
+    const upstreamBranch = this.worktree.status?.upstreamBranch;
+    if (!branch || !upstreamBranch) {
+      return false;
+    }
+    return hasUpstreamNameMismatch(branch, upstreamBranch);
+  }
+
   private buildDescription(): string | undefined {
     const badges: string[] = [];
     if (this.current) {
@@ -55,6 +64,9 @@ export class WorktreeItem extends vscode.TreeItem {
       }
       if (status.hasUpstream && ((status.ahead ?? 0) > 0 || (status.behind ?? 0) > 0)) {
         badges.push(`↑${status.ahead ?? 0} ↓${status.behind ?? 0}`);
+      }
+      if (status.upstreamBranch && this.hasUpstreamNameMismatch()) {
+        badges.push(`⚠ upstream ${status.upstreamBranch}`);
       }
       if (status.lastCommitIso) {
         badges.push(formatAge(status.lastCommitIso));
@@ -85,6 +97,9 @@ export class WorktreeItem extends vscode.TreeItem {
         lines.push(`ahead ${status.ahead ?? 0} · behind ${status.behind ?? 0}`);
       } else {
         lines.push("no upstream");
+      }
+      if (status.upstreamBranch && this.hasUpstreamNameMismatch()) {
+        lines.push(`warning: tracked remote branch name differs: ${status.upstreamBranch}`);
       }
       if (status.lastCommitIso) {
         lines.push(`last commit: ${new Date(status.lastCommitIso).toLocaleString()}`);
