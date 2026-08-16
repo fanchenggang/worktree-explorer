@@ -23,6 +23,8 @@ export {
 } from "./gitWorktreeCore";
 
 const execFileAsync = promisify(execFile);
+const DEFAULT_GIT_TIMEOUT_MS = 120_000;
+const MAX_GIT_OUTPUT_BYTES = 10 * 1024 * 1024;
 
 /**
  * Resolves the git binary. Honors VS Code's built-in `git.path` setting so
@@ -47,7 +49,8 @@ export async function runGit(
     const { stdout } = await execFileAsync(gitCommand(), args, {
       cwd,
       encoding: "utf8",
-      timeout: options.timeoutMs,
+      timeout: options.timeoutMs ?? DEFAULT_GIT_TIMEOUT_MS,
+      maxBuffer: MAX_GIT_OUTPUT_BYTES,
       signal: options.signal,
       // Never let git block on an interactive credential prompt: with no TTY
       // the prompt can hang forever instead of failing.
@@ -80,10 +83,6 @@ export async function listWorktrees(cwd: string): Promise<GitWorktree[]> {
   return parsePorcelain(output);
 }
 
-export function workspaceRoot(): string | undefined {
-  return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-}
-
 export function workspaceRoots(): string[] {
   return (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
 }
@@ -114,11 +113,7 @@ async function computeRepositoryRoots(): Promise<string[]> {
       // For linked worktrees the common dir points at the main repository
       // `.git`; derive the main checkout from it so that a repo opened through
       // several of its worktrees is only listed once.
-      const commonDir = await tryRunGit(root, [
-        "rev-parse",
-        "--path-format=absolute",
-        "--git-common-dir",
-      ]);
+      const commonDir = await resolveGitCommonDir(root);
       if (commonDir !== undefined && path.basename(commonDir) === ".git") {
         unique.set(path.dirname(commonDir), path.dirname(commonDir));
         return;
@@ -138,6 +133,26 @@ async function computeRepositoryRoots(): Promise<string[]> {
     })
   );
   return [...unique.values()];
+}
+
+async function resolveGitCommonDir(root: string): Promise<string | undefined> {
+  // `--path-format=absolute` makes linked-worktree deduplication reliable, but
+  // it is only available since Git 2.31. Fall back to the plain form and
+  // resolve relative paths against the workspace root for older Git versions.
+  const absolute = await tryRunGit(root, [
+    "rev-parse",
+    "--path-format=absolute",
+    "--git-common-dir",
+  ]);
+  if (absolute !== undefined) {
+    return absolute;
+  }
+
+  const commonDir = await tryRunGit(root, ["rev-parse", "--git-common-dir"]);
+  if (commonDir === undefined) {
+    return undefined;
+  }
+  return path.isAbsolute(commonDir) ? path.resolve(commonDir) : path.resolve(root, commonDir);
 }
 
 export async function currentBranch(cwd: string): Promise<string> {
@@ -325,14 +340,6 @@ export async function fetchAllRemotes(cwd: string, signal?: AbortSignal): Promis
   return runGit(cwd, ["fetch", "--all", "--prune"], { signal });
 }
 
-export async function fetchWorktree(
-  cwd: string,
-  worktreePath: string,
-  signal?: AbortSignal
-): Promise<string> {
-  return runGit(cwd, ["-C", worktreePath, "fetch", "--all", "--prune"], { signal });
-}
-
 export async function mergeBranch(
   cwd: string,
   worktreePath: string,
@@ -391,7 +398,9 @@ export async function getWorktreeStatuses(
   worktrees: GitWorktree[],
   concurrency = 4
 ): Promise<Map<string, WorktreeStatus>> {
-  const candidates = worktrees.filter((worktree) => worktree.bare === false);
+  const candidates = worktrees.filter(
+    (worktree) => worktree.bare === false && worktree.prunable === false
+  );
   const statuses = new Map<string, WorktreeStatus>();
   let nextIndex = 0;
 

@@ -4,7 +4,6 @@
   "configuration.title": "Worktree Explorer",
   "config.worktreeExplorer.ideaCommand.description": "Command used to open IntelliJ IDEA.",
   "config.worktreeExplorer.cursorCommand.description": "Command used to open Cursor when this extension is not running inside Cursor.",
-  "config.worktreeExplorer.vscodeCommand.description": "Command used to open VS Code from Cursor or another host.",
   "config.worktreeExplorer.defaultBranchPrefix.description": "Default prefix suggested when creating a new local branch.",
   "config.worktreeExplorer.autoRefresh.description": "When the Worktrees view refreshes automatically.",
   "config.worktreeExplorer.autoRefresh.description.enum.manual": "Refresh only when the Refresh button is pressed.",
@@ -29,11 +28,11 @@
   "commands.worktreeExplorer.openTerminal.title": "Open in Terminal",
   "commands.worktreeExplorer.copyPath.title": "Copy Path",
   "commands.worktreeExplorer.prune.title": "Prune Worktrees",
-  "commands.worktreeExplorer.createWorktree.title": "Create Worktree Branch",
+  "commands.worktreeExplorer.createWorktree.title": "Create Worktree...",
   "commands.worktreeExplorer.pull.title": "Pull",
   "commands.worktreeExplorer.push.title": "Push",
   "commands.worktreeExplorer.fetchAll.title": "Fetch All Remotes",
   "commands.worktreeExplorer.pullAll.title": "Pull Selected Worktrees...",
-  "commands.worktreeExplorer.mergeBranch.title": "Merge Branch into Current Branch",
+  "commands.worktreeExplorer.mergeBranch.title": "Merge Branch into Worktree Branch",
   "commands.worktreeExplorer.deleteWorktree.title": "Delete Worktree"
 }

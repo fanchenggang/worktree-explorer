@@ -144,8 +144,10 @@ async function showOutputResult(title: string, body: string): Promise<void> {
 
 function isAbortError(error: unknown): boolean {
   return (
-    (error as { code?: unknown }).code === "ABORT_ERR" ||
-    (error as { name?: unknown }).name === "AbortError"
+    error !== null &&
+    error !== undefined &&
+    ((error as { code?: unknown }).code === "ABORT_ERR" ||
+      (error as { name?: unknown }).name === "AbortError")
   );
 }
 
@@ -192,6 +194,7 @@ export function activate(context: vscode.ExtensionContext): void {
   });
 
   context.subscriptions.push(
+    provider,
     vscode.window.registerTreeDataProvider("worktreeExplorer.list", provider),
     vscode.commands.registerCommand("worktreeExplorer.refresh", () => provider.refresh()),
     installAutoRefresh(provider),
@@ -243,17 +246,21 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!item) {
         return;
       }
-      const value = await vscode.window.showInputBox({
-        title: t("Worktree note"),
-        prompt: t("Note for {0}", labelOf(item)),
-        value: item.note,
-        placeHolder: t("What is this branch for? Leave empty to clear the note."),
-      });
-      if (value === undefined) {
-        return;
+      try {
+        const value = await vscode.window.showInputBox({
+          title: t("Worktree note"),
+          prompt: t("Note for {0}", labelOf(item)),
+          value: item.note,
+          placeHolder: t("What is this branch for? Leave empty to clear the note."),
+        });
+        if (value === undefined) {
+          return;
+        }
+        await notes.set(item.worktree.path, value);
+        provider.refresh(false);
+      } catch (error) {
+        showError(error);
       }
-      await notes.set(item.worktree.path, value);
-      provider.refresh(false);
     }),
     vscode.commands.registerCommand(
       "worktreeExplorer.openTerminal",
@@ -272,8 +279,12 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!item) {
         return;
       }
-      await vscode.env.clipboard.writeText(item.worktree.path);
-      void vscode.window.showInformationMessage(t("Copied {0}", item.worktree.path));
+      try {
+        await vscode.env.clipboard.writeText(item.worktree.path);
+        void vscode.window.showInformationMessage(t("Copied {0}", item.worktree.path));
+      } catch (error) {
+        showError(error);
+      }
     }),
     vscode.commands.registerCommand("worktreeExplorer.prune", async () => {
       const root = await repositories.current();
@@ -497,13 +508,17 @@ async function createWorktree(
       },
       async () => {
         await addWorktree(root, branch, directory, baseBranch, track);
-        if (copyDirs.length > 0) {
-          await copyConfiguredDirs(sourcePath, directory, copyDirs);
-        }
       }
     );
 
     provider.refresh();
+    if (copyDirs.length > 0) {
+      try {
+        await copyConfiguredDirs(sourcePath, directory, copyDirs);
+      } catch (error) {
+        showError(error);
+      }
+    }
     await showCreatedActions(branch, directory);
   } catch (error) {
     showError(error);
@@ -541,12 +556,16 @@ async function createExistingWorktree(
     },
     async () => {
       await addExistingWorktree(root, directory, branch);
-      if (copyDirs.length > 0) {
-        await copyConfiguredDirs(source, directory, copyDirs);
-      }
     }
   );
   provider.refresh();
+  if (copyDirs.length > 0) {
+    try {
+      await copyConfiguredDirs(source, directory, copyDirs);
+    } catch (error) {
+      showError(error);
+    }
+  }
   await showCreatedActions(branch, directory);
 }
 
@@ -571,12 +590,16 @@ async function createDetachedWorktree(
     },
     async () => {
       await addDetachedWorktree(root, directory, commitish);
-      if (copyDirs.length > 0) {
-        await copyConfiguredDirs(source, directory, copyDirs);
-      }
     }
   );
   provider.refresh();
+  if (copyDirs.length > 0) {
+    try {
+      await copyConfiguredDirs(source, directory, copyDirs);
+    } catch (error) {
+      showError(error);
+    }
+  }
   await showCreatedActions(commitish, directory);
 }
 
@@ -966,6 +989,7 @@ async function pullWorktreeCommand(item: WorktreeItem, provider: WorktreeProvide
     provider.refresh();
     await showOutputResult(t("Pulled {0}", labelOf(item)), result);
   } catch (error) {
+    provider.refresh();
     if (!isAbortError(error)) {
       showError(error);
     }
@@ -1092,6 +1116,7 @@ async function pushWorktreeCommand(item: WorktreeItem, provider: WorktreeProvide
     provider.refresh();
     await showOutputResult(t("Pushed {0}", labelOf(item)), result || successFallback);
   } catch (error) {
+    provider.refresh();
     if (!isAbortError(error)) {
       showError(error);
     }
@@ -1142,6 +1167,7 @@ async function mergeBranchCommand(item: WorktreeItem, provider: WorktreeProvider
     provider.refresh();
     await showOutputResult(t("Merged {0} into {1}", sourceBranch, item.worktree.branch), result);
   } catch (error) {
+    provider.refresh();
     if (!isAbortError(error)) {
       showError(error);
     }
@@ -1177,83 +1203,89 @@ async function deleteWorktreeCommand(
     return;
   }
 
-  const root = (await repositories.current()) ?? item.worktree.path;
   const branch = item.worktree.branch;
   const changedFiles = item.worktree.status?.changedFiles ?? 0;
-  const worktrees = await listWorktrees(root);
-
-  if (branch) {
-    // Prunable worktrees still hold their branch in git's registry, so
-    // `git branch -D` would refuse to delete it until the metadata is pruned.
-    const activeWorktrees = worktrees.filter((worktree) => worktree.bare === false);
-    const other = findBranchWorktree(activeWorktrees, branch, item.worktree.path);
-    if (other) {
-      void vscode.window.showErrorMessage(
-        other.prunable
-          ? t(
-              'Branch "{0}" is still checked out in prunable worktree "{1}". Run Prune Worktrees first.',
-              branch,
-              other.path
-            )
-          : t('Branch "{0}" is also checked out at "{1}". Delete or switch that worktree first.', branch, other.path)
-      );
-      return;
-    }
-  }
-
-  if (item.worktree.locked) {
-    const unlockChoice = await vscode.window.showWarningMessage(
-      t(
-        'Worktree "{0}" is locked{1}. Unlock it and continue?',
-        labelOf(item),
-        item.worktree.lockReason ? `: ${item.worktree.lockReason}` : ""
-      ),
-      { modal: true },
-      t("Unlock and Delete")
-    );
-    if (unlockChoice !== t("Unlock and Delete")) {
-      return;
-    }
-    await unlockWorktree(root, item.worktree.path);
-  }
-
-  const dirtyNotice =
-    changedFiles > 0
-      ? `\n\n${t(
-          "It has {0} changed file{1} that will be removed with the worktree.",
-          String(changedFiles),
-          changedFiles === 1 ? "" : "s"
-        )}`
-      : "";
-  const firstChoice = await vscode.window.showWarningMessage(
-    t('Delete worktree "{0}"?{1}', labelOf(item), dirtyNotice),
-    { modal: true },
-    branch ? t("Delete Worktree and Branch") : t("Remove Worktree")
-  );
-  if (firstChoice === undefined) {
-    return;
-  }
-
-  const deleteBranchToo = firstChoice === t("Delete Worktree and Branch");
-  const secondChoice = await vscode.window.showWarningMessage(
-    deleteBranchToo
-      ? t(
-          'This will permanently delete branch "{0}" and remove the worktree directory "{1}". This cannot be undone.',
-          String(branch),
-          item.worktree.path
-        )
-      : t(
-          'This will remove the worktree directory "{0}". The branch will be kept. This cannot be undone.',
-          item.worktree.path
-        ),
-    { modal: true },
-    deleteBranchToo ? t("Delete Branch and Worktree") : t("Remove Worktree")
-  );
-  if (secondChoice === undefined) {
-    return;
-  }
 
   try {
+    const root = (await repositories.current()) ?? item.worktree.path;
+    const dirtyNotice =
+      changedFiles > 0
+        ? `\n\n${t(
+            "It has {0} changed file{1} that will be removed with the worktree.",
+            String(changedFiles),
+            changedFiles === 1 ? "" : "s"
+          )}`
+        : "";
+    const firstChoice = await vscode.window.showWarningMessage(
+      t('Delete worktree "{0}"?{1}', labelOf(item), dirtyNotice),
+      { modal: true },
+      branch ? t("Delete Worktree and Branch") : t("Remove Worktree"),
+      ...(branch ? [t("Remove Worktree")] : [])
+    );
+    if (firstChoice === undefined) {
+      return;
+    }
+
+    const deleteBranchToo = firstChoice === t("Delete Worktree and Branch");
+    if (deleteBranchToo && branch) {
+      // Prunable worktrees still hold their branch in git's registry, so
+      // `git branch -D` would refuse to delete it until the metadata is pruned.
+      const worktrees = await listWorktrees(root);
+      const activeWorktrees = worktrees.filter((worktree) => worktree.bare === false);
+      const other = findBranchWorktree(activeWorktrees, branch, item.worktree.path);
+      if (other) {
+        void vscode.window.showErrorMessage(
+          other.prunable
+            ? t(
+                'Branch "{0}" is still checked out in prunable worktree "{1}". Run Prune Worktrees first.',
+                branch,
+                other.path
+              )
+            : t('Branch "{0}" is also checked out at "{1}". Delete or switch that worktree first.', branch, other.path)
+        );
+        return;
+      }
+    }
+
+    let unlockAfterConfirm = false;
+    if (item.worktree.locked) {
+      const unlockChoice = await vscode.window.showWarningMessage(
+        t(
+          'Worktree "{0}" is locked{1}. Unlock it and continue?',
+          labelOf(item),
+          item.worktree.lockReason ? `: ${item.worktree.lockReason}` : ""
+        ),
+        { modal: true },
+        t("Unlock and Delete")
+      );
+      if (unlockChoice !== t("Unlock and Delete")) {
+        return;
+      }
+      unlockAfterConfirm = true;
+    }
+
+    const secondChoice = await vscode.window.showWarningMessage(
+      deleteBranchToo
+        ? t(
+            'This will permanently delete branch "{0}" and remove the worktree directory "{1}". This cannot be undone.',
+            String(branch),
+            item.worktree.path
+          )
+        : t(
+            'This will remove the worktree directory "{0}". The branch will be kept. This cannot be undone.',
+            item.worktree.path
+          ),
+      { modal: true },
+      deleteBranchToo ? t("Delete Branch and Worktree") : t("Remove Worktree")
+    );
+    if (secondChoice === undefined) {
+      return;
+    }
+
+    if (unlockAfterConfirm) {
+      await unlockWorktree(root, item.worktree.path);
+    }
+
     await removeWorktree(root, item.worktree.path, changedFiles > 0);
     if (deleteBranchToo && branch) {
       await deleteBranch(root, branch);
@@ -1262,6 +1294,7 @@ async function deleteWorktreeCommand(
     provider.refresh();
     void vscode.window.showInformationMessage(t("Deleted worktree {0}.", labelOf(item)));
   } catch (error) {
+    provider.refresh();
     showError(error);
   }
 }
@@ -1477,6 +1510,13 @@ function installAutoRefresh(provider: WorktreeProvider): vscode.Disposable {
       event.affectsConfiguration("worktreeExplorer.refreshIntervalSeconds")
     ) {
       apply();
+    }
+    if (event.affectsConfiguration("worktreeExplorer.statusCacheSeconds")) {
+      provider.refresh(true);
+    }
+    if (event.affectsConfiguration("git.path")) {
+      invalidateRepositoryRootsCache();
+      provider.refresh(false);
     }
   });
 

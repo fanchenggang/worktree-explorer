@@ -4,7 +4,6 @@
   "configuration.title": "Worktree Explorer",
   "config.worktreeExplorer.ideaCommand.description": "用于打开 IntelliJ IDEA 的命令。",
   "config.worktreeExplorer.cursorCommand.description": "不在 Cursor 内运行时，用于打开 Cursor 的命令。",
-  "config.worktreeExplorer.vscodeCommand.description": "用于从 Cursor 或其他宿主打开 VS Code 的命令。",
   "config.worktreeExplorer.defaultBranchPrefix.description": "创建本地新分支时建议的默认前缀。",
   "config.worktreeExplorer.autoRefresh.description": "Worktrees 视图自动刷新的时机。",
   "config.worktreeExplorer.refreshIntervalSeconds.description": "autoRefresh 为 interval 时的刷新间隔（秒）。",
@@ -29,11 +28,11 @@
   "commands.worktreeExplorer.openTerminal.title": "在终端中打开",
   "commands.worktreeExplorer.copyPath.title": "复制路径",
   "commands.worktreeExplorer.prune.title": "清理 Worktrees",
-  "commands.worktreeExplorer.createWorktree.title": "创建 Worktree 分支",
+  "commands.worktreeExplorer.createWorktree.title": "创建 Worktree...",
   "commands.worktreeExplorer.pull.title": "拉取",
   "commands.worktreeExplorer.push.title": "推送",
   "commands.worktreeExplorer.fetchAll.title": "获取所有远端",
   "commands.worktreeExplorer.pullAll.title": "拉取选中的 Worktrees...",
-  "commands.worktreeExplorer.mergeBranch.title": "合并分支到当前分支",
+  "commands.worktreeExplorer.mergeBranch.title": "合并分支到该 Worktree 分支",
   "commands.worktreeExplorer.deleteWorktree.title": "删除 Worktree"
 }

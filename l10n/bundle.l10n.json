@@ -64,7 +64,6 @@
   "Every local branch is already checked out in a worktree.": "Every local branch is already checked out in a worktree.",
   "Failed to open Cursor ({0}). Install the Cursor shell command, or set worktreeExplorer.cursorCommand.": "Failed to open Cursor ({0}). Install the Cursor shell command, or set worktreeExplorer.cursorCommand.",
   "Failed to open IntelliJ IDEA. In IDEA, run Tools → Create Command-line Launcher, or set worktreeExplorer.ideaCommand to the absolute path.": "Failed to open IntelliJ IDEA. In IDEA, run Tools → Create Command-line Launcher, or set worktreeExplorer.ideaCommand to the absolute path.",
-  "Failed to open VS Code ({0}). Install the VS Code shell command, or set worktreeExplorer.vscodeCommand.": "Failed to open VS Code ({0}). Install the VS Code shell command, or set worktreeExplorer.vscodeCommand.",
   "Failed {0} worktree(s):": "Failed {0} worktree(s):",
   "Fetch": "Fetch",
   "Fetch Remotes": "Fetch Remotes",

@@ -11,6 +11,33 @@ const OPEN_A_SENTINEL = "__open_a__";
 const EXTERNAL_COMMAND_TIMEOUT_MS = 15_000;
 
 function runExternal(command: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
+  let lastError: unknown;
+  for (const candidate of windowsCommandCandidates(command)) {
+    try {
+      return runExternalCandidate(candidate, args);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+function windowsCommandCandidates(command: string): string[] {
+  if (process.platform !== "win32") {
+    return [command];
+  }
+  if (/\.(cmd|bat|exe|com)$/i.test(command)) {
+    return [command];
+  }
+  // The default Cursor/VS Code shell commands are usually `.cmd` shims on
+  // Windows, while Node's execFile cannot resolve `.cmd` without a shell.
+  return [command, `${command}.cmd`, `${command}.exe`];
+}
+
+function runExternalCandidate(
+  command: string,
+  args: string[]
+): Promise<{ stdout: string; stderr: string }> {
   const needsShell = process.platform === "win32" && /\.(cmd|bat)$/i.test(command);
   if (needsShell) {
     // With `shell: true` Node passes the joined string to cmd.exe verbatim, so
@@ -50,25 +77,6 @@ export async function openInCursor(worktreePath: string): Promise<void> {
     throw new Error(
       vscode.l10n.t(
         "Failed to open Cursor ({0}). Install the Cursor shell command, or set worktreeExplorer.cursorCommand.",
-        command
-      )
-    );
-  }
-}
-
-export async function openInCode(worktreePath: string): Promise<void> {
-  if (isRunningInApp("visual studio code")) {
-    await openFolder(worktreePath, { forceNewWindow: true });
-    return;
-  }
-
-  const command = config().get<string>("vscodeCommand", "code");
-  try {
-    await runExternal(command, [worktreePath]);
-  } catch {
-    throw new Error(
-      vscode.l10n.t(
-        "Failed to open VS Code ({0}). Install the VS Code shell command, or set worktreeExplorer.vscodeCommand.",
         command
       )
     );

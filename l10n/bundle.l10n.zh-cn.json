@@ -162,7 +162,6 @@
   "It has {0} changed file{1} that will be removed with the worktree.": "它有 {0} 个未提交文件，将随 worktree 一起删除。",
   "The selected repository. Click to choose another workspace repository.": "当前选中的仓库。点击可选择工作区中的其他仓库。",
   "Failed to open Cursor ({0}). Install the Cursor shell command, or set worktreeExplorer.cursorCommand.": "无法打开 Cursor（{0}）。请安装 Cursor shell 命令，或设置 worktreeExplorer.cursorCommand。",
-  "Failed to open VS Code ({0}). Install the VS Code shell command, or set worktreeExplorer.vscodeCommand.": "无法打开 VS Code（{0}）。请安装 VS Code shell 命令，或设置 worktreeExplorer.vscodeCommand。",
   "Failed to open IntelliJ IDEA. In IDEA, run Tools → Create Command-line Launcher, or set worktreeExplorer.ideaCommand to the absolute path.": "无法打开 IntelliJ IDEA。请在 IDEA 中运行 Tools → Create Command-line Launcher，或将 worktreeExplorer.ideaCommand 设为绝对路径。",
   "This worktree is currently open in this window. Open another worktree window first, then delete this one from there.": "此 worktree 正在当前窗口中打开。请先在其他 worktree 窗口中打开，再从那里删除它。",
   "{0} change{1}": "{0} 个改动",

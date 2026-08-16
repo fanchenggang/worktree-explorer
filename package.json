@@ -43,11 +43,6 @@
           "default": "cursor",
           "description": "%config.worktreeExplorer.cursorCommand.description%"
         },
-        "worktreeExplorer.vscodeCommand": {
-          "type": "string",
-          "default": "code",
-          "description": "%config.worktreeExplorer.vscodeCommand.description%"
-        },
         "worktreeExplorer.defaultBranchPrefix": {
           "type": "string",
           "default": "feature/",
@@ -248,12 +243,12 @@
       "view/item/context": [
         {
           "command": "worktreeExplorer.openCursor",
-          "when": "view == worktreeExplorer.list && viewItem =~ /worktree/",
+          "when": "view == worktreeExplorer.list && viewItem =~ /worktree/ && viewItem =~ /attached/ && viewItem =~ /checkout/",
           "group": "inline"
         },
         {
           "command": "worktreeExplorer.openIdea",
-          "when": "view == worktreeExplorer.list && viewItem =~ /worktree/",
+          "when": "view == worktreeExplorer.list && viewItem =~ /worktree/ && viewItem =~ /attached/ && viewItem =~ /checkout/",
           "group": "inline"
         },
         {
@@ -283,12 +278,12 @@
         },
         {
           "command": "worktreeExplorer.revealInOS",
-          "when": "view == worktreeExplorer.list && viewItem =~ /worktree/",
+          "when": "view == worktreeExplorer.list && viewItem =~ /worktree/ && viewItem =~ /attached/ && viewItem =~ /checkout/",
           "group": "navigation@4"
         },
         {
           "command": "worktreeExplorer.openTerminal",
-          "when": "view == worktreeExplorer.list && viewItem =~ /worktree/",
+          "when": "view == worktreeExplorer.list && viewItem =~ /worktree/ && viewItem =~ /attached/ && viewItem =~ /checkout/",
           "group": "navigation@5"
         },
         {

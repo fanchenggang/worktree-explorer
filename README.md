@@ -1,6 +1,6 @@
 # Worktree Explorer
 
-Cursor / VS Code 侧边栏插件：列出当前仓库的全部 git worktree，给分支加本机备注，并用 Cursor、VS Code 或 IntelliJ IDEA 打开。
+Cursor / VS Code 侧边栏插件：列出当前仓库的全部 git worktree，给分支加本机备注，并用 Cursor 或 IntelliJ IDEA 打开。
 
 ## 功能
 
@@ -102,7 +102,6 @@ VSCE_PAT=<your-token> npx --yes @vscode/vsce@3.9.2 publish
 |------|--------|------|
 | `worktreeExplorer.ideaCommand` | `idea` | 打开 IDEA 的命令。 |
 | `worktreeExplorer.cursorCommand` | `cursor` | 不在 Cursor 内运行时用来打开 Cursor 的命令。 |
-| `worktreeExplorer.vscodeCommand` | `code` | 用来打开 VS Code 的命令。 |
 | `worktreeExplorer.defaultBranchPrefix` | `feature/` | 创建本地新分支时的默认前缀。 |
 | `worktreeExplorer.autoRefresh` | `onFocus` | 自动刷新模式：`manual` / `onFocus` / `interval`。 |
 | `worktreeExplorer.refreshIntervalSeconds` | `60` | `interval` 模式下的刷新间隔。 |

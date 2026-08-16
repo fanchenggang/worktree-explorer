@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- Deleting a branch worktree now offers a separate "remove worktree only" option instead of always deleting the local branch.
+- Locked worktrees are no longer unlocked until the final delete confirmation is accepted.
+- Delete, edit-note, and copy-path failures are surfaced through the normal error path instead of becoming unhandled promise rejections.
+- Settings-directory copy failures no longer prevent the new worktree from appearing in the tree.
+- Linked-worktree repository discovery works on Git 2.25–2.30 by resolving `--git-common-dir` manually when `--path-format=absolute` is unavailable.
+- Windows launcher fallback now tries `.cmd` and `.exe` forms for default commands such as `cursor`.
+- Prunable worktrees are skipped during status reads, avoiding per-refresh git failures.
+- Status-cache and `git.path` setting changes invalidate cached state.
+- Pull, push, merge, and delete operations refresh the tree even when git fails.
+
+### Removed
+
+- Removed the unused `worktreeExplorer.vscodeCommand` setting and dead `openInCode` helper.
+
 ## [0.5.0] - 2026-08-16
 
 ### Added

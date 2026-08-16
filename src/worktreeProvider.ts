@@ -215,7 +215,9 @@ export interface WorktreeProviderOptions {
   getRepositoryRoot: () => Promise<string | undefined>;
 }
 
-export class WorktreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
+export class WorktreeProvider
+  implements vscode.TreeDataProvider<vscode.TreeItem>, vscode.Disposable
+{
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<
     vscode.TreeItem | undefined | void
   >();
@@ -235,6 +237,11 @@ export class WorktreeProvider implements vscode.TreeDataProvider<vscode.TreeItem
       this.statusCache.clear();
     }
     this._onDidChangeTreeData.fire();
+  }
+
+  dispose(): void {
+    this.statusCache.clear();
+    this._onDidChangeTreeData.dispose();
   }
 
   getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
